@@ -114,6 +114,7 @@
       <div id="cBox" style="display:none">
         <span id="cText"></span>
       </div>
+      <button class="btn btn-sm btn-out mt8" id="btnTownBoard" style="display:none;margin:8px auto" aria-label="View Town Board">📋 Town Board — View All Characters</button>
       <hr>
       <!-- Chat -->
       <div class="chat-panel" id="chatPanel">
@@ -319,6 +320,17 @@
       </div>
 
       <button class="btn btn-red mt8" id="rulesOk">Got It</button>
+    </div>
+  </div>
+
+  <!-- ═══ TOWN BOARD MODAL ═══ -->
+  <div class="modal-overlay" id="townBoardModal">
+    <div class="modal" style="max-width:700px">
+      <button class="modal-close" id="townBoardClose" aria-label="Close town board">&times;</button>
+      <h3>📋 Town Board — Resident Profiles</h3>
+      <div class="muted tc mb8" style="font-size:.75rem">Public descriptions visible to all. Hidden details require investigation.</div>
+      <div class="town-board-grid" id="townBoardGrid"></div>
+      <button class="btn btn-out mt8" id="townBoardOk">Close</button>
     </div>
   </div>
 

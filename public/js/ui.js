@@ -1,5 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
 // NIGHTFALL — UI Module
+// Full persona anonymity — no usernames shown during gameplay
 // ═══════════════════════════════════════════════════════════════
 
 import { AVATARS, getRoleInfo } from './roles.js';
@@ -39,7 +40,7 @@ export function updateSoundToggle(muted) {
   if (btn) btn.textContent = muted ? '🔇' : '🔊';
 }
 
-// ── Avatar Grid ──────────────────────────────────────────────
+// ── Avatar Grid (Lobby only — usernames visible here) ────────
 export function renderAvatarGrid(selectedAvatar, onSelect) {
   const grid = document.getElementById('avatarGrid');
   if (!grid) return;
@@ -48,14 +49,11 @@ export function renderAvatarGrid(selectedAvatar, onSelect) {
   ).join('');
   grid.onclick = (e) => {
     const opt = e.target.closest('.avatar-option');
-    if (opt) {
-      const idx = parseInt(opt.dataset.idx);
-      onSelect(AVATARS[idx]);
-    }
+    if (opt) onSelect(AVATARS[parseInt(opt.dataset.idx)]);
   };
 }
 
-// ── Lobby ────────────────────────────────────────────────────
+// ── Lobby (usernames visible — NOT in game yet) ──────────────
 export function renderLobby(players, myId, isHost, onKick) {
   const ul = document.getElementById('lList');
   if (!ul) return;
@@ -67,60 +65,71 @@ export function renderLobby(players, myId, isHost, onKick) {
     if (i === 0 || p.isHost) badges += '<span class="badge bh">HOST</span>';
     if (p.id === myId) badges += '<span class="badge by">YOU</span>';
     let kickBtn = '';
-    if (isHost && p.id !== myId) {
-      kickBtn = `<button class="btn-danger" data-kick="${p.id}" aria-label="Kick ${esc(p.name)}" style="font-family:var(--font-mono)">✕</button>`;
-    }
+    if (isHost && p.id !== myId) kickBtn = `<button class="btn-danger" data-kick="${p.id}" style="font-family:var(--font-mono)">✕</button>`;
     li.innerHTML = `<div class="pav">${p.avatar || '👤'}</div><div class="pnm">${esc(p.name)}${p.disconnected ? ' <span class="muted" style="font-size:.7rem">(disconnected)</span>' : ''}</div>${badges}${kickBtn}`;
     ul.appendChild(li);
   });
-
-  // Kick handler
-  if (isHost && onKick) {
-    ul.querySelectorAll('[data-kick]').forEach(btn => {
-      btn.onclick = (e) => {
-        e.stopPropagation();
-        onKick(btn.dataset.kick);
-      };
-    });
-  }
-
+  if (isHost && onKick) ul.querySelectorAll('[data-kick]').forEach(btn => { btn.onclick = (e) => { e.stopPropagation(); onKick(btn.dataset.kick); }; });
   document.getElementById('pcnt').textContent = players.length;
   const sb = document.getElementById('startBtn');
   if (sb) sb.disabled = players.length < 4;
   const lMsg = document.getElementById('lMsg');
   if (lMsg) lMsg.textContent = players.length < 4 ? `Need ${4 - players.length} more` : 'Ready!';
-
-  // Show settings button for host only
   const settingsBtn = document.getElementById('btnSettings');
   if (settingsBtn) settingsBtn.style.display = isHost ? 'inline-flex' : 'none';
-
-  // Toggle host/guest controls
   document.getElementById('hCtrl').style.display = isHost ? 'block' : 'none';
   document.getElementById('gCtrl').style.display = isHost ? 'none' : 'block';
 }
 
-// ── Role Reveal ──────────────────────────────────────────────
-export function renderRole(roleKey, allyList = [], persona = null) {
+// ── Role Reveal + Character Dossier ──────────────────────────
+export function renderRole(roleKey, allyList = [], persona = null, character = null) {
   const info = getRoleInfo(roleKey);
   let extra = '';
   if (roleKey === 'killer' && allyList.length > 0) {
     extra = `<div style="color:var(--blood-bright);font-size:.85rem;margin-top:8px">Fellow killers: ${allyList.map(n => esc(n)).join(', ')}</div>`;
   }
+
+  // Persona badge
   let personaHtml = '';
   if (persona) {
-    personaHtml = `<div class="persona-badge" style="margin:0 auto 14px;justify-content:center"><span class="persona-icon">${persona.icon}</span><span>Your identity this game: <span class="persona-name">${esc(persona.name)}</span></span></div>`;
+    personaHtml = `<div class="persona-badge" style="margin:0 auto 14px;justify-content:center"><span class="persona-icon">${persona.icon}</span><span>Your identity: <span class="persona-name">${esc(persona.name)}</span></span></div>`;
   }
+
+  // Night action hint
   const nightAction = roleKey === 'killer'
-    ? '<div class="muted tc mt8" style="font-size:.8rem">🗡 At night: select a victim, then complete a QTE to attack. Sloppy kills leave clues!</div>'
+    ? '<div class="muted tc mt8" style="font-size:.8rem">🗡 At night: select a victim → complete a QTE. Sloppy kills leave clues!</div>'
     : roleKey === 'doctor'
-    ? '<div class="muted tc mt8" style="font-size:.8rem">🩺 At night: protect a player, then investigate a suspect via QTE.</div>'
-    : '<div class="muted tc mt8" style="font-size:.8rem">🔎 At night: investigate a suspect via QTE. Better accuracy = better clues!</div>';
+    ? '<div class="muted tc mt8" style="font-size:.8rem">🩺 At night: protect a player → then investigate via QTE.</div>'
+    : roleKey === 'detective'
+    ? '<div class="muted tc mt8" style="font-size:.8rem">🔍 At night: investigate via easier QTE → uncover hidden traits!</div>'
+    : '<div class="muted tc mt8" style="font-size:.8rem">🔎 At night: investigate via QTE. Better accuracy = better clues!</div>';
+
+  // Character dossier
+  let dossierHtml = '';
+  if (character) {
+    const pubTraits = character.pub ? Object.entries(character.pub).map(([k, v]) => {
+      const labels = { hairStyle: '💇 Hair', hairColor: '🎨 Hair Color', outfit: '👔 Outfit', outfitColor: '🎨 Color', shoes: '👟 Shoes', accessory: '💍 Accessory' };
+      return `<div class="dossier-trait"><span class="dossier-trait-label">${labels[k] || k}</span><span class="dossier-trait-value">${esc(v)}</span></div>`;
+    }).join('') : '';
+
+    const hiddenTraits = character.hidden ? Object.entries(character.hidden).map(([k, v]) => {
+      const labels = { perfume: '🌸 Scent', mark: '🔖 Mark', walkStyle: '🚶 Walk', voice: '🗣 Voice', habit: '🤏 Habit', secretItem: '🔒 Secret' };
+      return `<div class="dossier-trait"><span class="dossier-trait-label">${labels[k] || k}</span><span class="dossier-trait-value">${esc(v)}</span></div>`;
+    }).join('') : '';
+
+    dossierHtml = `<div class="dossier-card" style="margin-top:16px;text-align:left">` +
+      `<div class="dossier-traits">${pubTraits}</div>` +
+      (hiddenTraits ? `<span class="dossier-hidden-label">🔒 Hidden Details (only you know)</span><div class="dossier-traits">${hiddenTraits}</div>` : '') +
+      `</div>`;
+  }
 
   document.getElementById('rContent').innerHTML =
     personaHtml +
     `<span class="role-icon">${info.icon}</span>` +
     `<div class="role-nm" style="color:${info.color}">${info.name}</div>` +
-    `<p class="role-desc">${info.desc}</p>${extra}${nightAction}`;
+    `<p class="role-desc">${info.desc}</p>${extra}${nightAction}` +
+    `<div class="muted tc mt8" style="font-size:.7rem;color:var(--gold-dim)">⚠ Other players can only see you as: ${persona ? persona.icon + ' ' + persona.name : 'Unknown'}</div>` +
+    dossierHtml;
   document.getElementById('readyBtn').disabled = false;
   document.getElementById('readyBtn').textContent = 'I Am Ready';
 }
@@ -153,14 +162,10 @@ export function showDeathAnnounce(name) {
   const el = document.getElementById('dAnnounce');
   const nameEl = document.getElementById('dName');
   if (el && nameEl) { nameEl.textContent = name; el.style.display = 'block'; }
-  makeSplat();
-  screenShake();
+  makeSplat(); screenShake();
 }
 
-export function hideDeathAnnounce() {
-  const el = document.getElementById('dAnnounce');
-  if (el) el.style.display = 'none';
-}
+export function hideDeathAnnounce() { const el = document.getElementById('dAnnounce'); if (el) el.style.display = 'none'; }
 
 export function showDoctorSave(name) {
   const el = document.getElementById('dSaved');
@@ -168,10 +173,7 @@ export function showDoctorSave(name) {
   if (el && nameEl) { nameEl.textContent = name; el.style.display = 'block'; }
 }
 
-export function hideDoctorSave() {
-  const el = document.getElementById('dSaved');
-  if (el) el.style.display = 'none';
-}
+export function hideDoctorSave() { const el = document.getElementById('dSaved'); if (el) el.style.display = 'none'; }
 
 export function showClue(clueHtml) {
   const cb = document.getElementById('cBox');
@@ -179,12 +181,9 @@ export function showClue(clueHtml) {
   if (cb && ct) { ct.innerHTML = clueHtml; cb.style.display = 'block'; }
 }
 
-export function hideClue() {
-  const cb = document.getElementById('cBox');
-  if (cb) cb.style.display = 'none';
-}
+export function hideClue() { const cb = document.getElementById('cBox'); if (cb) cb.style.display = 'none'; }
 
-// ── Vote Rendering ───────────────────────────────────────────
+// ── Vote Rendering (uses persona names, NOT usernames) ───────
 export function renderVotes(players, myId, votes, selectedId, voted, isDead, hideVotes = true) {
   const c = document.getElementById('vList');
   if (!c) return;
@@ -196,7 +195,8 @@ export function renderVotes(players, myId, votes, selectedId, voted, isDead, hid
     b.id = 'vb' + p.id;
     b.disabled = isDead || voted;
     const voteTxt = (!hideVotes && vc > 0) ? `🗳 ${vc}` : '';
-    b.innerHTML = `<span>${p.avatar || '👤'} ${esc(p.name)}</span><span style="color:var(--pale-dim);font-size:.85rem">${voteTxt}</span>`;
+    // Show persona name + icon, NOT username
+    b.innerHTML = `<span>${p.avatar || '❓'} ${esc(p.name)}</span><span style="color:var(--pale-dim);font-size:.85rem">${voteTxt}</span>`;
     b.dataset.pid = p.id;
     c.appendChild(b);
   });
@@ -211,19 +211,19 @@ export function renderVerdict(executedPlayer, isJester = false) {
     vc.innerHTML = `<div class="muted tc" style="font-family:var(--font-display)">No consensus — no execution this round.</div>`;
     return;
   }
-
+  const displayName = executedPlayer._displayName || executedPlayer.name;
   if (isJester) {
     vc.innerHTML =
       `<div class="tc" style="margin-bottom:14px">` +
-      `<div style="font-size:3rem;margin-bottom:10px">${executedPlayer.avatar || '👤'}</div>` +
-      `<div style="font-family:var(--font-display);font-size:1.2rem">${esc(executedPlayer.name)} was executed</div>` +
+      `<div style="font-size:3rem;margin-bottom:10px">${executedPlayer.avatar || '❓'}</div>` +
+      `<div style="font-family:var(--font-display);font-size:1.2rem">${esc(displayName)} was executed</div>` +
       `<div style="margin-top:8px;color:#ff9800">🤡 THEY WERE THE JESTER — They win!</div></div>`;
   } else {
     const isk = executedPlayer.role === 'killer';
     vc.innerHTML =
       `<div class="tc" style="margin-bottom:14px">` +
-      `<div style="font-size:3rem;margin-bottom:10px">${executedPlayer.avatar || '👤'}</div>` +
-      `<div style="font-family:var(--font-display);font-size:1.2rem">${esc(executedPlayer.name)} was executed</div>` +
+      `<div style="font-size:3rem;margin-bottom:10px">${executedPlayer.avatar || '❓'}</div>` +
+      `<div style="font-family:var(--font-display);font-size:1.2rem">${esc(displayName)} was executed</div>` +
       `<div style="margin-top:8px;color:${isk ? 'var(--blood-bright)' : '#81c784'}">` +
       `${isk ? '☠ A KILLER' : '😇 INNOCENT'}</div></div>`;
   }
@@ -238,47 +238,45 @@ export function renderVoteBars(tally, players) {
     const p = players.find(x => x.id === id);
     if (!p) return;
     const pct = Math.round(cnt / total * 100);
-    bb.innerHTML += `<div class="vbw"><div class="vbr"><span>${p.avatar || '👤'} ${esc(p.name)}</span><span>${cnt} vote${cnt !== 1 ? 's' : ''}</span></div><div class="vbt"><div class="vbf" style="width:${pct}%"></div></div></div>`;
+    bb.innerHTML += `<div class="vbw"><div class="vbr"><span>${p.avatar || '❓'} ${esc(p.name)}</span><span>${cnt} vote${cnt !== 1 ? 's' : ''}</span></div><div class="vbt"><div class="vbf" style="width:${pct}%"></div></div></div>`;
   });
 }
 
-// ── Game Over ────────────────────────────────────────────────
+// ── Game Over (reveals real names + personas) ────────────────
 export function renderGameOver(winner, players, jesterWinner = null) {
   const kw = winner === 'killers';
   let bannerHtml = `<div class="win-txt ${kw ? 'wk' : 'wc'}">${kw ? '🗡 THE KILLERS WIN' : '⚖ JUSTICE PREVAILS'}</div>` +
     `<div class="tagline">${kw ? 'The town has fallen into darkness' : 'The killer has been brought to justice'}</div>`;
-
-  if (jesterWinner) {
-    bannerHtml += `<div class="tagline" style="color:#ff9800;margin-top:8px">🤡 ${esc(jesterWinner)} also wins as the Jester!</div>`;
-  }
-
+  if (jesterWinner) bannerHtml += `<div class="tagline" style="color:#ff9800;margin-top:8px">🤡 ${esc(jesterWinner)} also wins as the Jester!</div>`;
   document.getElementById('oBanner').innerHTML = bannerHtml;
 
+  // Reveal: show BOTH persona name and real name
   document.getElementById('fReveal').innerHTML = players.map(p => {
     const info = getRoleInfo(p.role);
+    const displayName = p.displayName || p.name;
     return `<div class="pitem" style="padding:11px 8px;border-bottom:1px solid rgba(255,255,255,.05)">` +
       `<div class="pav">${p.avatar || '👤'}</div>` +
-      `<div class="pnm" style="${!p.alive ? 'text-decoration:line-through;opacity:.45' : ''}">${esc(p.name)}</div>` +
-      `<span class="badge" style="background:${info.color === '#81c784' ? 'rgba(76,175,80,.12)' : info.color === 'var(--blood-bright)' ? 'rgba(139,0,0,.2)' : info.color === 'var(--det-bright)' ? 'rgba(26,107,138,.2)' : 'rgba(200,150,50,.12)'};color:${info.color};border:1px solid ${info.color === '#81c784' ? 'rgba(76,175,80,.4)' : 'currentColor'}">${info.name}</span></div>`;
+      `<div class="pnm" style="${!p.alive ? 'text-decoration:line-through;opacity:.45' : ''}">${esc(displayName)}</div>` +
+      `<span class="badge" style="background:${info.color === '#81c784' ? 'rgba(76,175,80,.12)' : 'rgba(139,0,0,.2)'};color:${info.color};border:1px solid currentColor">${info.name}</span></div>`;
   }).join('');
 
   spawnParticles(kw ? '🗡' : '⚖');
 }
 
-// ── Night Overlay ────────────────────────────────────────────
-export function renderNightKillerUI(alivePlayers) {
+// ── Night Overlay — Killer (persona names only) ──────────────
+export function renderNightKillerUI(targets) {
   const area = document.getElementById('nAct');
   if (!area) return;
   area.innerHTML =
     `<div style="color:var(--blood-bright);font-family:var(--font-display);font-size:1rem;margin-bottom:14px">Choose Your Victim</div>` +
     `<div id="kList"></div>` +
-    `<div id="kCfm" class="muted tc" style="display:none;margin-top:10px;font-size:.85rem">☠ Target locked — await dawn</div>`;
+    `<div id="kCfm" class="muted tc" style="display:none;margin-top:10px;font-size:.85rem"></div>`;
   const kl = document.getElementById('kList');
-  alivePlayers.forEach(p => {
+  targets.forEach(t => {
     const b = document.createElement('button');
     b.className = 'bplayer';
-    b.innerHTML = `<span>${p.avatar || '👤'} ${esc(p.name)}</span>`;
-    b.dataset.pid = p.id;
+    b.innerHTML = `<span>${esc(t.displayName)}</span>`;
+    b.dataset.pid = t.id;
     kl.appendChild(b);
   });
   return kl;
@@ -290,8 +288,7 @@ export function renderNightDetectiveUI(alivePlayers, timerSec) {
   area.innerHTML =
     `<div style="color:var(--det-bright);font-family:var(--font-display);font-size:1rem;margin-bottom:4px">🔍 Investigate a Suspect</div>` +
     `<div class="timer" id="dtmr" style="font-size:1.4rem">${timerSec}</div>` +
-    `<div id="dList"></div>` +
-    `<div id="dRes" style="display:none" class="cluebox"></div>`;
+    `<div id="dList"></div><div id="dRes" style="display:none" class="cluebox"></div>`;
   const dl = document.getElementById('dList');
   alivePlayers.forEach(p => {
     const b = document.createElement('button');
@@ -303,20 +300,19 @@ export function renderNightDetectiveUI(alivePlayers, timerSec) {
   return dl;
 }
 
-export function renderNightDoctorUI(alivePlayers, cantProtectSelf) {
+export function renderNightDoctorUI(targets, cantProtectSelf) {
   const area = document.getElementById('nAct');
   if (!area) return;
   area.innerHTML =
     `<div style="color:#81c784;font-family:var(--font-display);font-size:1rem;margin-bottom:14px">🩺 Protect a Player</div>` +
     `<div id="docList"></div>` +
-    `<div id="docCfm" class="muted tc" style="display:none;margin-top:10px;font-size:.85rem;color:#81c784">🩺 Protection applied — await dawn</div>`;
+    `<div id="docCfm" class="muted tc" style="display:none;margin-top:10px;font-size:.85rem;color:#81c784">🩺 Protection applied</div>`;
   const dl = document.getElementById('docList');
-  alivePlayers.forEach(p => {
+  targets.forEach(p => {
     const b = document.createElement('button');
     b.className = 'bdet';
-    b.style.borderColor = 'rgba(76,175,80,.3)';
-    b.style.background = 'rgba(76,175,80,.05)';
-    b.innerHTML = `<span>${p.avatar || '👤'} ${esc(p.name)}${cantProtectSelf && p.isSelf ? ' <span class="muted" style="font-size:.7rem">(blocked)</span>' : ''}</span>`;
+    b.style.borderColor = 'rgba(76,175,80,.3)'; b.style.background = 'rgba(76,175,80,.05)';
+    b.innerHTML = `<span>${esc(p.displayName)}${cantProtectSelf && p.isSelf ? ' <span class="muted" style="font-size:.7rem">(blocked)</span>' : ''}</span>`;
     b.dataset.pid = p.id;
     if (cantProtectSelf && p.isSelf) b.disabled = true;
     dl.appendChild(b);
@@ -333,13 +329,43 @@ export function renderNightCivilianUI() {
     `<div style="font-size:3rem;text-align:center;margin-top:20px;animation:pu 2.5s infinite">😴</div>`;
 }
 
+// ── Town Board Rendering ─────────────────────────────────────
+export function renderTownBoard(boardData) {
+  const grid = document.getElementById('townBoardGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  boardData.forEach(entry => {
+    const card = document.createElement('div');
+    card.className = 'dossier-card' + (!entry.alive ? ' pdisconnected' : '');
+
+    const pubTraits = entry.pub.map(t =>
+      `<div class="dossier-trait"><span class="dossier-trait-label">${t.label}</span><span class="dossier-trait-value">${esc(t.value)}</span></div>`
+    ).join('');
+
+    let hiddenSection = '';
+    if (entry.hidden) {
+      hiddenSection = `<span class="dossier-hidden-label">🔒 Hidden Details</span>` +
+        entry.hidden.map(t => `<div class="dossier-trait"><span class="dossier-trait-label">${t.label}</span><span class="dossier-trait-value">${esc(t.value)}</span></div>`).join('');
+    } else {
+      hiddenSection = `<div class="dossier-locked">🔒 Hidden details — investigate to reveal</div>`;
+    }
+
+    card.innerHTML =
+      `<div class="dossier-header">` +
+        `<span class="dossier-icon">${entry.persona.icon}</span>` +
+        `<span class="dossier-name">${esc(entry.persona.name)}${entry.isMe ? ' <span class="badge by" style="font-size:.5rem">YOU</span>' : ''}${!entry.alive ? ' <span class="muted" style="font-size:.7rem">☠ DEAD</span>' : ''}</span>` +
+      `</div>` +
+      `<div class="dossier-traits">${pubTraits}</div>` +
+      hiddenSection;
+
+    grid.appendChild(card);
+  });
+}
+
 // ── Timer ────────────────────────────────────────────────────
 export function updateTimer(elementId, seconds) {
   const el = document.getElementById(elementId);
-  if (el) {
-    el.textContent = seconds;
-    el.classList.toggle('urg', seconds <= 10);
-  }
+  if (el) { el.textContent = seconds; el.classList.toggle('urg', seconds <= 10); }
 }
 
 // ── Log ──────────────────────────────────────────────────────
@@ -353,10 +379,7 @@ export function addLog(txt, cls = 'ls') {
   log.scrollTop = log.scrollHeight;
 }
 
-export function clearLog() {
-  const log = document.getElementById('dLog');
-  if (log) log.innerHTML = '';
-}
+export function clearLog() { const log = document.getElementById('dLog'); if (log) log.innerHTML = ''; }
 
 // ── Effects ──────────────────────────────────────────────────
 export function makeSplat() {
@@ -376,10 +399,8 @@ export function screenShake() {
 export function spawnParticles(emoji = '⚖', count = 20) {
   for (let i = 0; i < count; i++) {
     const p = document.createElement('div');
-    p.className = 'particle';
-    p.textContent = emoji;
-    p.style.left = Math.random() * 100 + 'vw';
-    p.style.bottom = '-20px';
+    p.className = 'particle'; p.textContent = emoji;
+    p.style.left = Math.random() * 100 + 'vw'; p.style.bottom = '-20px';
     p.style.animationDuration = (3 + Math.random() * 4) + 's';
     p.style.animationDelay = (Math.random() * 2) + 's';
     document.body.appendChild(p);

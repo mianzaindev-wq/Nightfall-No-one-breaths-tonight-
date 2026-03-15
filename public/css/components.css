@@ -865,6 +865,168 @@ hr { border: none; border-top: 1px solid rgba(201,168,76,.1); margin: 16px 0; }
   display: block;
 }
 
+/* ── Circle Hunt QTE ────────────────────────────────────────── */
+.qte-circle-arena {
+  position: relative;
+  width: 100%;
+  height: 200px;
+  max-width: 320px;
+  background: rgba(0,0,0,.3);
+  border: 1px solid rgba(201,168,76,.1);
+  border-radius: var(--radius);
+  overflow: hidden;
+  touch-action: manipulation;
+}
+.qte-circle {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: qteCircleSpawn .3s ease-out both;
+  transition: transform .1s;
+  -webkit-tap-highlight-color: transparent;
+}
+.qte-circle:active { transform: scale(.85); }
+.qte-circle-white { background: rgba(255,255,255,.85); box-shadow: 0 0 12px rgba(255,255,255,.4); }
+.qte-circle-red { background: rgba(220,50,50,.85); box-shadow: 0 0 12px rgba(220,50,50,.4); }
+.qte-circle-burst { animation: qteCircleBurst .3s forwards; background: rgba(129,199,132,.9); }
+.qte-circle-burst-bad { animation: qteCircleBurst .3s forwards; background: rgba(220,50,50,.9); }
+.qte-circle-fade { animation: qteCircleFade .3s forwards; }
+
+@keyframes qteCircleSpawn { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes qteCircleBurst { to { transform: scale(2); opacity: 0; } }
+@keyframes qteCircleFade { to { transform: scale(.5); opacity: 0; } }
+
+@media (max-width: 480px) {
+  .qte-circle-arena { height: 180px; }
+  .qte-circle { width: 44px; height: 44px; }
+}
+
+/* ── Pattern Memory QTE ─────────────────────────────────────── */
+.qte-pattern-display {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin: 10px 0;
+}
+.qte-pattern-sym {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  border: 2px solid rgba(201,168,76,.2);
+  border-radius: 6px;
+  background: rgba(255,255,255,.03);
+  transition: all .15s;
+}
+.qte-pattern-sym.qte-hit { background: rgba(76,175,80,.15); }
+.qte-pattern-sym.qte-active { animation: pu .6s infinite; }
+.qte-pattern-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+.qte-pattern-btn {
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  border: 2px solid;
+  border-radius: 8px;
+  background: rgba(255,255,255,.03);
+  cursor: pointer;
+  transition: all .12s;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.qte-pattern-btn:hover { background: rgba(255,255,255,.08); }
+.qte-pattern-btn:active { transform: scale(.9); }
+
+/* ── Character Dossier Card ─────────────────────────────────── */
+.dossier-card {
+  background: rgba(0,0,0,.25);
+  border: 1px solid rgba(201,168,76,.12);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 10px;
+}
+.dossier-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(201,168,76,.08);
+}
+.dossier-icon { font-size: 1.6rem; }
+.dossier-name {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  color: var(--gold);
+}
+.dossier-traits { display: flex; flex-direction: column; gap: 4px; }
+.dossier-trait {
+  display: flex;
+  justify-content: space-between;
+  font-size: .8rem;
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(255,255,255,.03);
+}
+.dossier-trait-label {
+  color: var(--pale-dim);
+  font-family: var(--font-mono);
+  font-size: .6rem;
+  letter-spacing: .05em;
+  min-width: 80px;
+}
+.dossier-trait-value { color: var(--pale); text-align: right; }
+.dossier-hidden-label {
+  font-family: var(--font-mono);
+  font-size: .55rem;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  color: var(--det-bright);
+  margin-top: 10px;
+  margin-bottom: 6px;
+  display: block;
+}
+.dossier-locked {
+  font-family: var(--font-mono);
+  font-size: .65rem;
+  color: var(--pale-dim);
+  font-style: italic;
+  text-align: center;
+  padding: 8px;
+  border: 1px dashed rgba(201,168,76,.1);
+  border-radius: var(--radius);
+  margin-top: 8px;
+}
+
+/* ── Town Board Grid ────────────────────────────────────────── */
+.town-board-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+  max-height: 60vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--gold-dim) transparent;
+}
+@media (max-width: 600px) {
+  .town-board-grid { grid-template-columns: 1fr; }
+}
+
 /* ── Utility ────────────────────────────────────────────────── */
 .tc { text-align: center; }
 .mt8 { margin-top: var(--space-sm); }

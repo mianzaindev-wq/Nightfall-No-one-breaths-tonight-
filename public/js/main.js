@@ -166,6 +166,21 @@ document.getElementById('rulesOk').addEventListener('click', () => {
   document.getElementById('rulesModal').classList.remove('open');
 });
 
+// ── Town Board Modal ─────────────────────────────────────────
+document.getElementById('btnTownBoard').addEventListener('click', () => {
+  const boardData = game.getTownBoardData();
+  ui.renderTownBoard(boardData);
+  document.getElementById('townBoardModal').classList.add('open');
+});
+
+document.getElementById('townBoardClose').addEventListener('click', () => {
+  document.getElementById('townBoardModal').classList.remove('open');
+});
+
+document.getElementById('townBoardOk').addEventListener('click', () => {
+  document.getElementById('townBoardModal').classList.remove('open');
+});
+
 // Close modals on overlay click
 document.querySelectorAll('.modal-overlay').forEach(overlay => {
   overlay.addEventListener('click', (e) => {
