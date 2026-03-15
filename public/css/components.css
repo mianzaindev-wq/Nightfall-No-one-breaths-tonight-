@@ -1650,3 +1650,33 @@ hr { border: none; border-top: 1px solid rgba(201,168,76,.1); margin: 16px 0; }
   pointer-events: none;
 }
 
+/* ── Evidence Board Filters ───────────────────────────────── */
+.eb-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px 0;
+  margin-bottom: 6px;
+}
+.eb-filter-btn {
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.1);
+  color: var(--pale-dim);
+  font-size: .65rem;
+  padding: 3px 8px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all .2s;
+}
+.eb-filter-btn:hover {
+  background: rgba(201,168,76,.1);
+  border-color: rgba(201,168,76,.3);
+  color: var(--gold);
+}
+.eb-filter-active {
+  background: rgba(201,168,76,.2);
+  border-color: var(--gold);
+  color: var(--gold);
+  font-weight: 600;
+}
+

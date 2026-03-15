@@ -109,6 +109,31 @@ export function generateKillClue(killerCharacter, score, killCount, allCharacter
   return { strength: 'large', text: `Crime scene evidence: ${hidden}.`, isFalse: false };
 }
 
+// ── MULTI-CLUE PER KILL ─────────────────────────────────────
+// Each kill drops 2-4 evidence pieces. Worse QTE = more clues dropped.
+// Perfect kill still produces 0 clues.
+export function generateKillClues(killerCharacter, score, killCount, allCharacters = null, killerId = null) {
+  // Perfect kill — no evidence at all
+  if (score >= 0.98 && Math.random() < 0.05) {
+    return [];
+  }
+  // Determine clue count based on QTE performance
+  let clueCount;
+  if (score >= 0.9) clueCount = 2;
+  else if (score >= 0.6) clueCount = 2 + (Math.random() < 0.4 ? 1 : 0); // 2-3
+  else if (score >= 0.3) clueCount = 3;
+  else clueCount = 3 + (Math.random() < 0.5 ? 1 : 0); // 3-4
+
+  const clues = [];
+  for (let i = 0; i < clueCount; i++) {
+    // Vary QTE score slightly for each clue to get diverse strengths
+    const variedScore = Math.max(0, Math.min(1, score + (Math.random() - 0.5) * 0.3));
+    const clue = generateKillClue(killerCharacter, variedScore, killCount, allCharacters, killerId);
+    if (clue.text) clues.push(clue);
+  }
+  return clues;
+}
+
 // ── INVESTIGATION CLUE GENERATION ────────────────────────────
 export function generateInvestClue(targetCharacter, targetPersona, targetRole, score, isDetective) {
   const isKiller = targetRole === 'killer';

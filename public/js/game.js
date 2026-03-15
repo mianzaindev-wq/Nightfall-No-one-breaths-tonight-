@@ -6,7 +6,7 @@
 
 import { assignRoles, getRoleInfo } from './roles.js';
 import { assignCharacters, getPublicDesc, getHiddenDesc } from './avatar.js';
-import { generateKillClue, generateInvestClue, generateSnoopClue, computeVerification, formatEvidence, runQTE, getKillDifficulty, getInvestigateDifficulty, getVerifyDifficulty } from './qte.js';
+import { generateKillClue, generateKillClues, generateInvestClue, generateSnoopClue, computeVerification, formatEvidence, runQTE, getKillDifficulty, getInvestigateDifficulty, getVerifyDifficulty } from './qte.js';
 import audio from './audio.js';
 import chat from './chat.js';
 import * as ui from './ui.js';
@@ -157,7 +157,9 @@ export default class Game {
     n.on('KILL_ACTION', d => {
       if (this.isHost) {
         this.nightActions[d._from] = d.targetId;
-        if (d.killClue?.text) this.killClues.push({ text: d.killClue.text, accuracyPct: d.killClue.accuracyPct, isFalse: d.killClue.isFalse, strength: d.killClue.strength });
+        // Support multi-clue per kill
+        if (d.killClues?.length) d.killClues.forEach(c => { if (c.text) this.killClues.push({ text: c.text, accuracyPct: c.accuracyPct, isFalse: c.isFalse, strength: c.strength }); });
+        else if (d.killClue?.text) this.killClues.push({ text: d.killClue.text, accuracyPct: d.killClue.accuracyPct, isFalse: d.killClue.isFalse, strength: d.killClue.strength });
         this.killCounts[d._from] = (this.killCounts[d._from] || 0) + 1;
         this._checkNightDone();
       }
@@ -234,6 +236,7 @@ export default class Game {
       this.skipVotes.add(this.myId);
       const alive = this.players.filter(p => p.alive && !p.disconnected).length;
       const needed = Math.ceil(alive * 0.7);
+      this._updateSkipUI(this.skipVotes.size, needed);
       this.net.relay({ t: 'SKIP_UPDATE', count: this.skipVotes.size, needed });
       if (this.skipVotes.size >= needed) this._triggerSkip();
     } else {
@@ -441,17 +444,20 @@ export default class Game {
         const killerChar = this.myCharacter;
         // Pass all characters for potential false evidence
         const allChars = this._hostCharacters || new Map();
-        const killClue = generateKillClue(killerChar, score, myKills, allChars, this.myId);
+        const killClues = generateKillClues(killerChar, score, myKills, allChars, this.myId);
         // Kill confirmation + perfect kill feedback
-        if (!killClue.text) {
+        if (killClues.length === 0) {
           ui.toast('☠ Clean kill — no trace left behind.', false);
           ui.addLog('☠ Perfect kill! No evidence was left.', 'lk');
         } else {
           const strengthMsg = { trace: 'barely left a mark', small: 'left a small trace', medium: 'left some evidence', large: 'left strong evidence', perfect: 'left damning evidence' };
-          ui.toast(`🗡 Target marked. You ${strengthMsg[killClue.strength] || 'left evidence'}.`, false);
+          const worst = killClues.reduce((a, b) => {
+            const order = ['trace','small','medium','large','perfect']; return order.indexOf(a.strength) > order.indexOf(b.strength) ? a : b;
+          });
+          ui.toast(`🗡 Target marked. You ${strengthMsg[worst.strength] || 'left evidence'}. (${killClues.length} clue${killClues.length > 1 ? 's' : ''} dropped)`, false);
         }
-        if (this.isHost) { this.nightActions[this.myId] = tid; if (killClue.text) this.killClues.push({ text: killClue.text, accuracyPct: killClue.accuracyPct, isFalse: killClue.isFalse, strength: killClue.strength }); this.killCounts[this.myId] = myKills + 1; this._checkNightDone(); }
-        else this.net.relay({ t: 'KILL_ACTION', targetId: tid, killClue });
+        if (this.isHost) { this.nightActions[this.myId] = tid; killClues.forEach(c => this.killClues.push({ text: c.text, accuracyPct: c.accuracyPct, isFalse: c.isFalse, strength: c.strength })); this.killCounts[this.myId] = myKills + 1; this._checkNightDone(); }
+        else this.net.relay({ t: 'KILL_ACTION', targetId: tid, killClues });
       }
     };
   }
@@ -481,27 +487,39 @@ export default class Game {
 
   _resolveNight() {
     if (!this.isHost) return;
-    const vs = Object.values(this.nightActions);
-    let killedId = null, savedId = null;
-    if (vs.length) {
-      const freq = {}; vs.forEach(v => { freq[v] = (freq[v] || 0) + 1; });
-      const top = Object.entries(freq).sort((a, b) => b[1] - a[1])[0][0];
-      const vic = this.players.find(p => p.id === top);
-      if (vic && vic.alive) { if (this.doctorTarget === top) savedId = top; else { vic.alive = false; killedId = top; } }
-    }
-    this.killedId = killedId; this.savedId = savedId;
+    // Multiple killers = multiple kills (each killer targets independently)
+    const killedIds = []; let savedIds = [];
+    const killerTargets = {}; // deduplicate: each unique target
+    Object.entries(this.nightActions).forEach(([killerId, targetId]) => {
+      killerTargets[targetId] = (killerTargets[targetId] || []);
+      killerTargets[targetId].push(killerId);
+    });
+    Object.entries(killerTargets).forEach(([targetId, killerIds]) => {
+      const vic = this.players.find(p => p.id === targetId);
+      if (vic && vic.alive) {
+        if (this.doctorTarget === targetId) {
+          savedIds.push(targetId);
+        } else {
+          vic.alive = false;
+          killedIds.push(targetId);
+        }
+      }
+    });
+    this.killedIds = killedIds; this.savedIds = savedIds;
+    // Compat: keep single-target fields for recap
+    this.killedId = killedIds[0] || null; this.savedId = savedIds[0] || null;
     // Check if detective was killed
-    if (killedId) {
-      const killedPlayer = this.players.find(p => p.id === killedId);
+    killedIds.forEach(kid => {
+      const killedPlayer = this.players.find(p => p.id === kid);
       if (killedPlayer && killedPlayer.role === 'detective') this.detectiveDead = true;
-    }
+    });
     // Transition to INVESTIGATION phase (lights on)
     const investDur = (this.settings.investTime || 40) * 1000;
     // Add kill clues to evidence ledger as UNVERIFIED
     this.killClues.forEach(c => {
       this.evidenceLedger.push({ id: 'ev-' + Math.random().toString(36).slice(2,8), text: c.text, isFalse: c.isFalse, status: 'unverified', accuracyPct: null, verdictText: null, source: 'crime-scene', round: this.round, strength: c.strength || 'medium' });
     });
-    const payload = { t: 'INVESTIGATE', round: this.round, killedId, savedId, detectiveDead: this.detectiveDead, evidence: this.evidenceLedger.filter(e => e.round === this.round && e.source === 'crime-scene').map(e => ({ id: e.id, text: e.text, strength: e.strength })), dur: investDur, pa: this.players.map(p => ({ id: p.id, alive: p.alive })) };
+    const payload = { t: 'INVESTIGATE', round: this.round, killedIds, savedIds, killedId: killedIds[0] || null, savedId: savedIds[0] || null, detectiveDead: this.detectiveDead, evidence: this.evidenceLedger.filter(e => e.round === this.round && e.source === 'crime-scene').map(e => ({ id: e.id, text: e.text, strength: e.strength })), dur: investDur, pa: this.players.map(p => ({ id: p.id, alive: p.alive })) };
     this.net.relay(payload);
     this._onInvestigate(payload);
   }
@@ -538,17 +556,21 @@ export default class Game {
     const h2 = document.querySelector('#s-day h2');
     if (h2) { h2.textContent = '🔦 LIGHTS ON — INVESTIGATE'; h2.style.color = 'var(--det-bright)'; }
 
-    // Death announcement
+    // Death announcement (support multiple kills)
     ui.hideDeathAnnounce(); ui.hideDoctorSave();
-    if (d.killedId) {
-      ui.showDeathAnnounce(this._pname(d.killedId));
-      ui.addLog(`Night ${this.round}: ${this._pname(d.killedId)} was found dead.`, 'lk');
-      // Detective death announcement
+    const killedIds = d.killedIds || (d.killedId ? [d.killedId] : []);
+    const savedIds = d.savedIds || (d.savedId ? [d.savedId] : []);
+    if (killedIds.length > 0) {
+      killedIds.forEach(kid => {
+        ui.showDeathAnnounce(this._pname(kid));
+        ui.addLog(`Night ${this.round}: ${this._pname(kid)} was found dead.`, 'lk');
+      });
+      if (killedIds.length > 1) ui.addLog(`☠ ${killedIds.length} victims tonight! The killers were busy...`, 'lk');
       if (this.detectiveDead) {
         ui.addLog('🔍 The detective has fallen... evidence can no longer be verified.', 'lk');
       }
     }
-    else if (d.savedId) { ui.showDoctorSave(this._pname(d.savedId)); ui.addLog(`Night ${this.round}: ${this._pname(d.savedId)} was saved!`, 'lc'); audio.play('save'); }
+    else if (savedIds.length > 0) { ui.showDoctorSave(this._pname(savedIds[0])); ui.addLog(`Night ${this.round}: ${this._pname(savedIds[0])} was saved!`, 'lc'); audio.play('save'); }
     else ui.addLog(`Night ${this.round}: No one died.`, 'ls');
 
     // Crime scene evidence — UNVERIFIED (grey ? circle)
@@ -613,12 +635,20 @@ export default class Game {
   }
 
   _getMyMaxActions() {
-    return this.myRole === 'detective' ? 2 : 1;
+    if (this.myRole === 'detective') return 2;
+    // Scale civilian actions with player count
+    const alive = this.players.filter(p => p.alive).length;
+    if (alive >= 11) return 3;
+    if (alive >= 7) return 2;
+    return 1;
   }
 
   _canCivilianAct() {
     if (this.myRole === 'detective' || this.myRole === 'killer') return true;
-    return this.civilianActionsUsed < 3;
+    // Scale team pool with player count
+    const alive = this.players.filter(p => p.alive).length;
+    const teamPool = alive >= 11 ? 6 : alive >= 7 ? 4 : 3;
+    return this.civilianActionsUsed < teamPool;
   }
 
   _renderInvestigationUI(logArea) {
@@ -1028,7 +1058,26 @@ export default class Game {
     this.phase = 'dinner'; this.votes = {}; this.selVote = null; this.voted = false;
 
     const h2 = document.querySelector('#s-day h2');
-    if (h2) { h2.textContent = '🍽 DINNER — DISCUSSION & VOTE'; h2.style.color = 'var(--gold)'; }
+    if (h2) {
+      if (d.revote) {
+        h2.textContent = '⚡ TIE! FOCUSED REVOTE';
+        h2.style.color = '#ff7043';
+      } else {
+        h2.textContent = '🍽 DINNER — DISCUSSION & VOTE';
+        h2.style.color = 'var(--gold)';
+      }
+    }
+
+    // Revote: restrict vote targets to tied candidates only
+    if (d.revote) {
+      this.votes = {}; this.selVote = null; this.voted = false;
+      this._revoteTiedIds = d.tiedIds || [];
+      const names = (d.tiedNames || d.tiedIds?.map(id => this._pname(id)) || []).join(' vs ');
+      ui.addLog(`⚡ Vote tied! Focused revote between: ${names}`, 'lv');
+      chat.addMessage('', `⚡ The vote is TIED! 15 seconds to decide between: ${names}`, 'system');
+    } else {
+      this._revoteTiedIds = null;
+    }
 
     const ia = document.getElementById('investArea'); if (ia) ia.remove();
     const investSkip = document.getElementById('investSkipArea'); if (investSkip) investSkip.remove();
@@ -1110,7 +1159,11 @@ export default class Game {
   _renderVotes() {
     const me = this.players.find(p => p.id === this.myId);
     const isDead = me && !me.alive;
-    const dp = this.players.map(p => ({ ...p, name: this._pname(p.id), avatar: this.charData[p.id]?.persona?.icon || '❓' }));
+    let dp = this.players.map(p => ({ ...p, name: this._pname(p.id), avatar: this.charData[p.id]?.persona?.icon || '❓' }));
+    // If revote, only show tied candidates
+    if (this._revoteTiedIds && this._revoteTiedIds.length) {
+      dp = dp.filter(p => this._revoteTiedIds.includes(p.id));
+    }
     const c = ui.renderVotes(dp, this.myId, this.votes, this.selVote, this.voted, isDead, this.settings.hideVotes);
     if (c) c.onclick = (e) => { const btn = e.target.closest('.bplayer'); if (btn && !btn.disabled) this._pickVote(btn.dataset.pid); };
   }
@@ -1154,6 +1207,18 @@ export default class Game {
     const skipCount = Object.values(this.votes).filter(v => v === 'SKIP').length;
     const sorted = Object.entries(tally).sort((a, b) => b[1] - a[1]);
     let exId = null;
+    // Check for tie
+    if (sorted.length >= 2 && sorted[0][1] === sorted[1][1] && !this._isRevote) {
+      // TIE — trigger focused revote
+      const tiedIds = sorted.filter(([_, c]) => c === sorted[0][1]).map(([id]) => id);
+      this._isRevote = true;
+      const payload = { t: 'DINNER', round: this.round, revote: true, tiedIds, tiedNames: tiedIds.map(id => this._pname(id)), dur: 15000, pa: this.players.map(p => ({ id: p.id, alive: p.alive })) };
+      this.votes = {};
+      this.net.relay(payload);
+      this._onDinner(payload);
+      return;
+    }
+    this._isRevote = false;
     if (sorted.length && (sorted.length === 1 || sorted[0][1] > sorted[1][1])) exId = sorted[0][0];
     let isJester = false;
     if (exId) { const p = this.players.find(x => x.id === exId); if (p) { if (p.role === 'jester') { isJester = true; this.jesterWinner = this._pname(exId); } p.alive = false; } }
@@ -1275,6 +1340,7 @@ export default class Game {
     this.currentNightEvent = null; this.suspicionVotes = {}; this.mySuspicionVotes = new Set();
     this.roundRecap = {}; this.lastStandActive = false;
     this.detectiveDead = false; this.investigationRequests = []; this.pendingInvestRequest = null;
+    this._isRevote = false; this._revoteTiedIds = null;
     clearInterval(this.graceInterval);
     chat.clear(); ui.clearLog(); this._showLobby();
     if (this.isHost) this.net.relay({ t: 'PL', pl: this.players.map(p => ({ id: p.id, name: p.name, avatar: p.avatar, alive: true })) });
@@ -1605,15 +1671,38 @@ export default class Game {
   }
 
   // ── Evidence Window (dedicated modal, like town board) ─────
-  renderEvidenceWindow() {
+  renderEvidenceWindow(filter = 'all') {
     const grid = document.getElementById('evidenceWindowGrid');
     if (!grid) return;
+    this._evidenceFilter = filter;
+    let filtered = [...this.evidenceLedger];
+    // Apply filter
+    if (filter === 'verified') filtered = filtered.filter(e => e.status === 'verified');
+    else if (filter === 'unverified') filtered = filtered.filter(e => e.status === 'unverified');
+    else if (['trace','small','medium','large','perfect'].includes(filter)) filtered = filtered.filter(e => e.strength === filter);
+
     const byRound = {};
-    this.evidenceLedger.forEach(e => { if (!byRound[e.round]) byRound[e.round] = []; byRound[e.round].push(e); });
+    filtered.forEach(e => { if (!byRound[e.round]) byRound[e.round] = []; byRound[e.round].push(e); });
     const totalVerified = this.evidenceLedger.filter(e => e.status === 'verified').length;
-    let html = `<div class="eb-stats"><span>🗂 ${this.evidenceLedger.length} total</span><span>✅ ${totalVerified} verified</span><span>❓ ${this.evidenceLedger.length - totalVerified} unverified</span></div>`;
-    if (!this.evidenceLedger.length) {
-      html += `<div class="muted" style="padding:20px;text-align:center">No evidence collected yet.<br><span style="font-size:.7rem">Evidence is found at crime scenes and through investigation.</span></div>`;
+
+    // Filter buttons
+    const filters = [
+      { key: 'all', label: '🗂 All' },
+      { key: 'verified', label: '✅ Verified' },
+      { key: 'unverified', label: '❓ Unverified' },
+      { key: 'trace', label: '💨 Trace' },
+      { key: 'small', label: '🔹 Small' },
+      { key: 'medium', label: '🔸 Medium' },
+      { key: 'large', label: '🔴 Strong' },
+      { key: 'perfect', label: '⭐ Perfect' },
+    ];
+    let html = `<div class="eb-filters">${filters.map(f =>
+      `<button class="eb-filter-btn${filter === f.key ? ' eb-filter-active' : ''}" data-filter="${f.key}">${f.label}</button>`
+    ).join('')}</div>`;
+
+    html += `<div class="eb-stats"><span>🗂 ${this.evidenceLedger.length} total</span><span>✅ ${totalVerified} verified</span><span>❓ ${this.evidenceLedger.length - totalVerified} unverified</span></div>`;
+    if (!filtered.length) {
+      html += `<div class="muted" style="padding:20px;text-align:center">${filter === 'all' ? 'No evidence collected yet.' : `No ${filter} evidence found.`}<br><span style="font-size:.7rem">Evidence is found at crime scenes and through investigation.</span></div>`;
     }
     Object.entries(byRound).sort((a,b) => Number(a[0]) - Number(b[0])).forEach(([round, evs]) => {
       const rv = evs.filter(e => e.status === 'verified').length;
@@ -1632,6 +1721,10 @@ export default class Game {
       html += `</div>`;
     });
     grid.innerHTML = html;
+    // Wire filter buttons
+    grid.querySelectorAll('.eb-filter-btn').forEach(btn => {
+      btn.onclick = () => this.renderEvidenceWindow(btn.dataset.filter);
+    });
   }
 
   // ══════════════════════════════════════════════════════════
