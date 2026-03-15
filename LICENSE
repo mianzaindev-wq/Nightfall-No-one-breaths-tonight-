@@ -1,4 +1,4 @@
-NIGHTFALL — PERSONAL USE LICENSE
+NIGHTFALL — EDUCATIONAL USE ONLY LICENSE
 
 Copyright (c) 2025-2026 Zain Waqar. All rights reserved.
 
@@ -13,8 +13,9 @@ Copyright (c) 2025-2026 Zain Waqar. All rights reserved.
 
    "Author" refers to Muhammad Zain, the original creator and copyright holder.
 
-   "Personal Use" means use by an individual for private, non-commercial
-   entertainment, education, or personal enjoyment purposes only.
+   "Educational Use" means use by individuals or institutions for learning,
+   teaching, academic research, coursework, school projects, or personal
+   educational development purposes only.
 
    "Commercial Use" means any use of the Software that is intended for or
    directed toward generating revenue, financial gain, commercial advantage,
@@ -26,16 +27,31 @@ Copyright (c) 2025-2026 Zain Waqar. All rights reserved.
    grants you a limited, non-exclusive, non-transferable, revocable license
    to:
 
-   a) Use, copy, and run the Software for Personal Use only.
-   b) Modify the Software for Personal Use only.
+   a) Use, copy, and run the Software for Educational Use only.
+   b) Modify the Software for Educational Use only.
    c) Share unmodified or modified copies of the Software with others,
       provided that:
       - This License file is included in its entirety with all copies.
       - The original copyright notice is preserved.
       - Recipients are bound by the same terms and conditions.
       - No fee or compensation of any kind is charged for distribution.
+      - The use remains strictly educational.
 
-3. STRICT PROHIBITION OF COMMERCIAL USE
+3. PERMITTED EDUCATIONAL USES
+
+   The following uses are expressly permitted under this License:
+
+   a) Studying the source code to learn programming, game design, or software
+      architecture concepts.
+   b) Using the Software as part of academic coursework, assignments, or
+      school/university projects.
+   c) Demonstrating the Software in educational settings such as classrooms,
+      workshops, or academic presentations.
+   d) Modifying the Software as a learning exercise or for educational research.
+   e) Including the Software in educational portfolios or academic publications,
+      provided proper attribution is given to the Author.
+
+4. STRICT PROHIBITION OF COMMERCIAL USE
 
    ANY AND ALL COMMERCIAL USE OF THE SOFTWARE IS STRICTLY PROHIBITED.
 
@@ -63,7 +79,14 @@ Copyright (c) 2025-2026 Zain Waqar. All rights reserved.
    j) Any other use that directly or indirectly generates revenue, financial
       gain, or commercial advantage from the Software.
 
-4. INTELLECTUAL PROPERTY
+5. PROHIBITION OF NON-EDUCATIONAL PERSONAL USE
+
+   Use of the Software for personal entertainment, recreational gaming, or
+   any purpose outside the scope of educational activities as defined in
+   Section 3 is NOT permitted under this License. The Software is provided
+   exclusively as an educational resource.
+
+6. INTELLECTUAL PROPERTY
 
    a) The Software and all intellectual property rights therein remain the
       exclusive property of the Author.
@@ -73,7 +96,7 @@ Copyright (c) 2025-2026 Zain Waqar. All rights reserved.
       commercial purposes or in any manner that implies endorsement by
       the Author.
 
-5. CONTRIBUTIONS
+7. CONTRIBUTIONS
 
    a) If you submit contributions (pull requests, patches, suggestions) to the
       original repository, you agree that your contributions will be licensed
@@ -82,7 +105,7 @@ Copyright (c) 2025-2026 Zain Waqar. All rights reserved.
       Author a perpetual, irrevocable, non-exclusive license to use, modify,
       and distribute your contributions as part of the Software.
 
-6. NO WARRANTY
+8. NO WARRANTY
 
    THE SOFTWARE IS PROVIDED "AS IS," WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -91,7 +114,7 @@ Copyright (c) 2025-2026 Zain Waqar. All rights reserved.
    IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-7. LIMITATION OF LIABILITY
+9. LIMITATION OF LIABILITY
 
    IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY INDIRECT, INCIDENTAL,
    SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING BUT NOT LIMITED TO
@@ -101,29 +124,29 @@ Copyright (c) 2025-2026 Zain Waqar. All rights reserved.
    NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THE
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-8. TERMINATION
+10. TERMINATION
 
-   a) This License is effective until terminated.
-   b) Your rights under this License will terminate automatically and
-      immediately without notice if you fail to comply with any of its terms.
-   c) Upon termination, you must immediately cease all use of the Software
-      and destroy all copies in your possession.
+    a) This License is effective until terminated.
+    b) Your rights under this License will terminate automatically and
+       immediately without notice if you fail to comply with any of its terms.
+    c) Upon termination, you must immediately cease all use of the Software
+       and destroy all copies in your possession.
 
-9. GOVERNING LAW
+11. GOVERNING LAW
 
-   This License shall be governed by and construed in accordance with
-   applicable copyright and intellectual property laws. Any disputes arising
-   under this License shall be subject to the jurisdiction of the courts in
-   the Author's place of residence.
+    This License shall be governed by and construed in accordance with
+    applicable copyright and intellectual property laws. Any disputes arising
+    under this License shall be subject to the jurisdiction of the courts in
+    the Author's place of residence.
 
-10. SEVERABILITY
+12. SEVERABILITY
 
     If any provision of this License is held to be unenforceable or invalid,
     that provision shall be modified to the minimum extent necessary to make
     it enforceable, and the remaining provisions shall continue in full force
     and effect.
 
-11. ENTIRE AGREEMENT
+13. ENTIRE AGREEMENT
 
     This License constitutes the entire agreement between you and the Author
     regarding the Software and supersedes all prior agreements and
@@ -131,6 +154,7 @@ Copyright (c) 2025-2026 Zain Waqar. All rights reserved.
 
 ================================================================================
 
-For commercial licensing inquiries, please contact the Author directly.
+For commercial or non-educational licensing inquiries, please contact the
+Author directly.
 
 Copyright (c) 2025-2026 Zain Waqar. All rights reserved.

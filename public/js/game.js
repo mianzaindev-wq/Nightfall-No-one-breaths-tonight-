@@ -6,7 +6,7 @@
 
 import { assignRoles, getRoleInfo } from './roles.js';
 import { assignCharacters, getPublicDesc, getHiddenDesc } from './avatar.js';
-import { generateKillClue, generateInvestClue, computeVerification, formatEvidence, runQTE, getKillDifficulty, getInvestigateDifficulty, getVerifyDifficulty } from './qte.js';
+import { generateKillClue, generateInvestClue, generateSnoopClue, computeVerification, formatEvidence, runQTE, getKillDifficulty, getInvestigateDifficulty, getVerifyDifficulty } from './qte.js';
 import audio from './audio.js';
 import chat from './chat.js';
 import * as ui from './ui.js';
@@ -92,6 +92,13 @@ export default class Game {
     // Bots
     this.bots = [];
 
+    // Detective tracking
+    this.detectiveDead = false;
+
+    // Democratic investigation
+    this.investigationRequests = []; // { id, playerId, allows:[], denies:[], status }
+    this.pendingInvestRequest = null; // current request being voted on
+
     this.stats = JSON.parse(localStorage.getItem('nf_stats') || '{"games":0,"wins":0}');
     this._setupNetHandlers();
   }
@@ -156,6 +163,11 @@ export default class Game {
       }
     });
     n.on('INVEST_RESULT', d => { if (this.isHost && d.clue) this.investigationClues.push({ playerId: d._from, clue: d.clue, isFalse: d.isFalse || false }); });
+    // Democratic investigation handlers
+    n.on('INVEST_REQUEST', d => { this._onInvestRequest(d); });
+    n.on('INVEST_VOTE', d => { if (this.isHost) this._onInvestVote(d); });
+    n.on('INVEST_DECISION', d => { this._onInvestDecision(d); });
+    n.on('SNOOP_ALERT', d => { if (this.myRole === 'killer') this._showSnoopAlert(d); });
     n.on('DOC_PROTECT', d => { if (this.isHost) this.doctorTarget = d.targetId; });
     n.on('VOTE', d => { if (this.isHost) { this.votes[d._from] = d.targetId; this.net.relay({ t: 'VOTE_UPDATE', votes: this.votes }); this._checkVoteDone(); } });
     n.on('CHAT', d => { chat.addMessage(d.persona || d.name, d.text, d.chatType || 'normal'); audio.play('chat'); });
@@ -478,13 +490,18 @@ export default class Game {
       if (vic && vic.alive) { if (this.doctorTarget === top) savedId = top; else { vic.alive = false; killedId = top; } }
     }
     this.killedId = killedId; this.savedId = savedId;
+    // Check if detective was killed
+    if (killedId) {
+      const killedPlayer = this.players.find(p => p.id === killedId);
+      if (killedPlayer && killedPlayer.role === 'detective') this.detectiveDead = true;
+    }
     // Transition to INVESTIGATION phase (lights on)
     const investDur = (this.settings.investTime || 40) * 1000;
     // Add kill clues to evidence ledger as UNVERIFIED
     this.killClues.forEach(c => {
       this.evidenceLedger.push({ id: 'ev-' + Math.random().toString(36).slice(2,8), text: c.text, isFalse: c.isFalse, status: 'unverified', accuracyPct: null, verdictText: null, source: 'crime-scene', round: this.round, strength: c.strength || 'medium' });
     });
-    const payload = { t: 'INVESTIGATE', round: this.round, killedId, savedId, evidence: this.evidenceLedger.filter(e => e.round === this.round && e.source === 'crime-scene').map(e => ({ id: e.id, text: e.text, strength: e.strength })), dur: investDur, pa: this.players.map(p => ({ id: p.id, alive: p.alive })) };
+    const payload = { t: 'INVESTIGATE', round: this.round, killedId, savedId, detectiveDead: this.detectiveDead, evidence: this.evidenceLedger.filter(e => e.round === this.round && e.source === 'crime-scene').map(e => ({ id: e.id, text: e.text, strength: e.strength })), dur: investDur, pa: this.players.map(p => ({ id: p.id, alive: p.alive })) };
     this.net.relay(payload);
     this._onInvestigate(payload);
   }
@@ -497,6 +514,8 @@ export default class Game {
     d.pa.forEach(u => { const p = this.players.find(x => x.id === u.id); if (p) p.alive = u.alive; });
     this.phase = 'investigate';
     this.skipVotes = new Set(); this.mySkipVoted = false;
+    this.investigationRequests = []; this.pendingInvestRequest = null;
+    if (d.detectiveDead) this.detectiveDead = true;
     this.myActionsUsed = 0;
     this.civilianActionsUsed = 0;
     if (this.canvasCtrl) this.canvasCtrl.setNightPulse(0);
@@ -521,7 +540,14 @@ export default class Game {
 
     // Death announcement
     ui.hideDeathAnnounce(); ui.hideDoctorSave();
-    if (d.killedId) { ui.showDeathAnnounce(this._pname(d.killedId)); ui.addLog(`Night ${this.round}: ${this._pname(d.killedId)} was found dead.`, 'lk'); }
+    if (d.killedId) {
+      ui.showDeathAnnounce(this._pname(d.killedId));
+      ui.addLog(`Night ${this.round}: ${this._pname(d.killedId)} was found dead.`, 'lk');
+      // Detective death announcement
+      if (this.detectiveDead) {
+        ui.addLog('🔍 The detective has fallen... evidence can no longer be verified.', 'lk');
+      }
+    }
     else if (d.savedId) { ui.showDoctorSave(this._pname(d.savedId)); ui.addLog(`Night ${this.round}: ${this._pname(d.savedId)} was saved!`, 'lc'); audio.play('save'); }
     else ui.addLog(`Night ${this.round}: No one died.`, 'ls');
 
@@ -597,6 +623,8 @@ export default class Game {
 
   _renderInvestigationUI(logArea) {
     const isDet = this.myRole === 'detective';
+    const isKiller = this.myRole === 'killer';
+    const isCivilian = !isDet && !isKiller;
     const maxActions = this._getMyMaxActions();
     const remaining = maxActions - this.myActionsUsed;
     const canAct = remaining > 0 && this._canCivilianAct();
@@ -616,11 +644,22 @@ export default class Game {
 
     let html = `<div style="color:${acColor};font-family:var(--font-display);font-size:.9rem;margin:10px 0 6px">${roleLabel} — ${remaining} action${remaining > 1 ? 's' : ''} remaining</div>`;
 
-    // Option 1: Investigate a suspect
+    // Civilians need group permission — Detective/Killer investigate directly
+    if (isCivilian) {
+      html += `<div style="margin-bottom:6px"><button class="btn btn-sm btn-out" id="btnRequestInvest" style="width:100%">🔎 Request Investigation (${this.myActionsUsed}/${maxActions})</button><div class="muted" style="font-size:.65rem;margin-top:3px">Other players must approve your investigation</div></div>`;
+      html += `<div id="investQTE" style="display:none"></div><div id="investResult" style="display:none" class="evidence-box"></div>`;
+      investDiv.innerHTML = html;
+      logArea.parentNode.insertBefore(investDiv, logArea);
+      const reqBtn = document.getElementById('btnRequestInvest');
+      if (reqBtn) reqBtn.onclick = () => this._requestInvestigation();
+      return;
+    }
+
+    // Detective/Killer: direct investigation
     html += `<div style="margin-bottom:6px"><div class="evidence-label" style="margin-bottom:4px">🔎 INVESTIGATE A SUSPECT</div><div id="investList"></div></div>`;
 
-    // Option 2: Verify evidence — DETECTIVE ONLY
-    if (isDet && unverified.length > 0) {
+    // Option 2: Verify evidence — DETECTIVE ONLY (and only if detective is alive)
+    if (isDet && !this.detectiveDead && unverified.length > 0) {
       html += `<div style="margin-top:8px"><div class="evidence-label" style="margin-bottom:4px">🔬 VERIFY EVIDENCE (detective only)</div><div id="verifyList"></div></div>`;
     }
 
@@ -700,6 +739,9 @@ export default class Game {
     if (this.isHost) this.investigationClues.push({ playerId: this.myId, clue: result.text, isFalse: result.isFalse });
     else this.net.relay({ t: 'INVEST_RESULT', clue: result.text, isFalse: result.isFalse });
 
+    // Killer counter-intel: send snooping alert
+    this._sendSnoopAlert(score);
+
     const investSkip = document.getElementById('investSkipArea'); if (investSkip) investSkip.remove();
 
     // Re-render if more actions available
@@ -714,6 +756,7 @@ export default class Game {
     if (!ev) return;
     // Only detective can verify
     if (this.myRole !== 'detective') { ui.toast('Only the detective can verify evidence', true); return; }
+    if (this.detectiveDead) { ui.toast('The detective is gone... evidence can no longer be verified.', true); return; }
     const il = document.getElementById('investList'); if (il) il.style.display = 'none';
     const vl = document.getElementById('verifyList'); if (vl) vl.style.display = 'none';
     const diff = getVerifyDifficulty();
@@ -749,6 +792,222 @@ export default class Game {
     if (this.myActionsUsed < this._getMyMaxActions() && this._canCivilianAct() && logArea) {
       setTimeout(() => this._renderInvestigationUI(logArea), 2000);
     }
+  }
+
+  // ══════════════════════════════════════════════════════════
+  // DEMOCRATIC INVESTIGATION (Civilian Permission System)
+  // ══════════════════════════════════════════════════════════
+
+  _requestInvestigation() {
+    const reqId = 'req-' + Math.random().toString(36).slice(2, 8);
+    const pname = this._pname(this.myId);
+    const btn = document.getElementById('btnRequestInvest');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Request Pending...'; }
+    if (this.isHost) {
+      const req = { id: reqId, playerId: this.myId, personaName: pname, allows: [], denies: [], status: 'pending' };
+      this.investigationRequests.push(req);
+      this.pendingInvestRequest = req;
+      this.net.relay({ t: 'INVEST_REQUEST', reqId, playerId: this.myId, personaName: pname });
+      this._onInvestRequest({ reqId, playerId: this.myId, personaName: pname });
+    } else {
+      this.net.relay({ t: 'INVEST_REQUEST', reqId, playerId: this.myId, personaName: pname });
+    }
+    // Temp enable chat for 30s to explain
+    const chatPanel = document.getElementById('chatPanel');
+    if (chatPanel) chatPanel.style.display = 'block';
+    chat.setEnabled(true);
+    chat.addMessage('', `🔎 ${pname} wants to investigate! They have 30 seconds to explain why.`, 'system');
+  }
+
+  _onInvestRequest(d) {
+    // Host tracks request
+    if (this.isHost && !this.investigationRequests.find(r => r.id === d.reqId)) {
+      this.investigationRequests.push({ id: d.reqId, playerId: d.playerId, personaName: d.personaName, allows: [], denies: [], status: 'pending' });
+      this.pendingInvestRequest = this.investigationRequests.find(r => r.id === d.reqId);
+    }
+
+    // Don't show notification to the requester or dead/bot players
+    const me = this.players.find(p => p.id === this.myId);
+    if (d.playerId === this.myId || !me?.alive) return;
+
+    // Show notification card to everyone else
+    const stack = document.getElementById('notificationStack');
+    if (!stack) return;
+    const card = document.createElement('div');
+    card.className = 'invest-request-card';
+    card.id = `investReq-${d.reqId}`;
+    card.innerHTML = `
+      <div class="ir-header">🔎 Investigation Request</div>
+      <div class="ir-persona">${d.personaName} wants to investigate</div>
+      <div class="ir-timer" id="irTimer-${d.reqId}">30s to discuss</div>
+      <div class="ir-votes" id="irVotes-${d.reqId}"></div>
+      <div class="ir-actions">
+        <button class="btn btn-sm ir-allow" id="irAllow-${d.reqId}">✅ Allow</button>
+        <button class="btn btn-sm ir-deny" id="irDeny-${d.reqId}">❌ Deny</button>
+      </div>
+    `;
+    stack.appendChild(card);
+
+    document.getElementById(`irAllow-${d.reqId}`).onclick = () => {
+      this._castInvestVote(d.reqId, true);
+      card.querySelector('.ir-actions').innerHTML = '<div class="muted" style="font-size:.7rem">✅ You voted to allow</div>';
+    };
+    document.getElementById(`irDeny-${d.reqId}`).onclick = () => {
+      this._castInvestVote(d.reqId, false);
+      card.querySelector('.ir-actions').innerHTML = '<div class="muted" style="font-size:.7rem">❌ You voted to deny</div>';
+    };
+
+    // 30s timer
+    let tl = 30;
+    const timerEl = document.getElementById(`irTimer-${d.reqId}`);
+    const interval = setInterval(() => {
+      tl--;
+      if (timerEl) timerEl.textContent = `${tl}s remaining`;
+      if (tl <= 0) {
+        clearInterval(interval);
+        if (this.isHost) this._resolveInvestRequest(d.reqId);
+      }
+    }, 1000);
+    card._interval = interval;
+
+    // Enable chat temporarily for discussion
+    const chatPanel = document.getElementById('chatPanel');
+    if (chatPanel) chatPanel.style.display = 'block';
+    chat.setEnabled(true);
+    chat.addMessage('', `🔎 ${d.personaName} wants to investigate! Discuss and vote.`, 'system');
+    audio.play('vote');
+  }
+
+  _castInvestVote(reqId, allow) {
+    if (this.isHost) {
+      this._onInvestVote({ reqId, allow, _from: this.myId });
+    } else {
+      this.net.relay({ t: 'INVEST_VOTE', reqId, allow });
+    }
+  }
+
+  _onInvestVote(d) {
+    // Host only
+    const req = this.investigationRequests.find(r => r.id === d.reqId);
+    if (!req || req.status !== 'pending') return;
+    if (d.allow) req.allows.push(d._from || this.myId);
+    else req.denies.push(d._from || this.myId);
+    // Broadcast vote count update
+    this.net.relay({ t: 'INVEST_DECISION', reqId: d.reqId, status: 'voting', allows: req.allows.length, denies: req.denies.length });
+    // Check if all alive non-requester players have voted
+    const aliveVoters = this.players.filter(p => p.alive && p.id !== req.playerId && !p._isBot);
+    if (req.allows.length + req.denies.length >= aliveVoters.length) {
+      this._resolveInvestRequest(d.reqId);
+    }
+  }
+
+  _resolveInvestRequest(reqId) {
+    const req = this.investigationRequests.find(r => r.id === reqId);
+    if (!req || req.status !== 'pending') return;
+    const approved = req.allows.length >= req.denies.length; // tie = approved
+    req.status = approved ? 'approved' : 'denied';
+    this.net.relay({ t: 'INVEST_DECISION', reqId, status: req.status, allows: req.allows.length, denies: req.denies.length, playerId: req.playerId });
+  }
+
+  _onInvestDecision(d) {
+    // Update vote counts
+    const votesEl = document.getElementById(`irVotes-${d.reqId}`);
+    if (votesEl) votesEl.textContent = `✅ ${d.allows || 0}  /  ❌ ${d.denies || 0}`;
+
+    if (d.status === 'voting') return; // Just a vote count update
+
+    // Final decision
+    const card = document.getElementById(`investReq-${d.reqId}`);
+    const approved = d.status === 'approved';
+
+    if (card) {
+      card.querySelector('.ir-actions').innerHTML = `<div style="font-weight:bold;color:${approved ? '#66bb6a' : '#e53935'};font-size:.8rem">${approved ? '✅ APPROVED' : '❌ DENIED'} (${d.allows}/${d.allows + d.denies})</div>`;
+      if (card._interval) clearInterval(card._interval);
+      setTimeout(() => card.remove(), 3000);
+    }
+
+    ui.addLog(`🔎 Investigation request by ${d.playerId === this.myId ? 'you' : this._pname(d.playerId)}: ${approved ? '✅ Approved' : '❌ Denied'} (${d.allows} yes / ${d.denies} no)`, approved ? 'lc' : 'lk');
+
+    // If I'm the requester and approved → show target selection
+    if (d.playerId === this.myId) {
+      if (approved) {
+        const alive = this.players.filter(p => p.alive && p.id !== this.myId && !p._isBot);
+        this._showCivilianTargetSelection(alive);
+      } else {
+        ui.toast('Your investigation request was denied.', true);
+        const btn = document.getElementById('btnRequestInvest');
+        if (btn) { btn.disabled = true; btn.textContent = '❌ Request Denied'; btn.style.opacity = '.4'; }
+      }
+    }
+
+    // Disable chat again after decision
+    setTimeout(() => {
+      if (this.phase === 'investigate') {
+        const chatPanel = document.getElementById('chatPanel');
+        if (chatPanel) chatPanel.style.display = 'none';
+        chat.setEnabled(false);
+      }
+    }, 2000);
+  }
+
+  _showCivilianTargetSelection(alive) {
+    const investArea = document.getElementById('investArea');
+    if (!investArea) return;
+    let html = `<div class="evidence-label" style="margin-bottom:4px">🔎 CHOOSE A SUSPECT</div><div id="investList"></div>`;
+    const targetDiv = document.createElement('div');
+    targetDiv.innerHTML = html;
+    investArea.appendChild(targetDiv);
+    const il = document.getElementById('investList');
+    if (il) {
+      alive.forEach(p => {
+        const b = document.createElement('button');
+        b.className = 'bdet';
+        b.style.borderColor = 'rgba(201,168,76,.3)'; b.style.background = 'rgba(201,168,76,.05)';
+        b.innerHTML = `<span>${this._pname(p.id)}</span>`;
+        b.dataset.pid = p.id;
+        il.appendChild(b);
+      });
+      il.onclick = async (e) => {
+        const btn = e.target.closest('.bdet');
+        if (!btn || btn.disabled) return;
+        await this._doInvestigate(btn.dataset.pid);
+      };
+    }
+    const btn = document.getElementById('btnRequestInvest');
+    if (btn) btn.style.display = 'none';
+  }
+
+  // ══════════════════════════════════════════════════════════
+  // KILLER COUNTER-INTELLIGENCE (Snooping Alerts)
+  // ══════════════════════════════════════════════════════════
+
+  _sendSnoopAlert(score) {
+    const myChar = this.myCharacter;
+    const myPersona = this.myPersona;
+    if (!myChar || !myPersona) return;
+    const snoop = generateSnoopClue(myChar, myPersona, score);
+    if (!snoop) return;
+    // Send to host who relays only to killers
+    if (this.isHost) {
+      this.net.relay({ t: 'SNOOP_ALERT', text: snoop.text, level: snoop.level });
+      if (this.myRole === 'killer') this._showSnoopAlert(snoop);
+    } else {
+      this.net.relay({ t: 'SNOOP_ALERT', text: snoop.text, level: snoop.level });
+    }
+  }
+
+  _showSnoopAlert(d) {
+    if (this.myRole !== 'killer') return;
+    const stack = document.getElementById('notificationStack');
+    if (!stack) return;
+    const levelColors = { vague: '#888', moderate: '#f9a825', bold: '#ff7043', critical: '#e53935' };
+    const card = document.createElement('div');
+    card.className = `snoop-alert snoop-${d.level || 'vague'}`;
+    card.style.borderLeftColor = levelColors[d.level] || '#888';
+    card.innerHTML = `<div class="snoop-icon">🕵</div><div class="snoop-text">${d.text}</div>`;
+    stack.appendChild(card);
+    audio.play('chat');
+    setTimeout(() => { card.classList.add('snoop-fadeout'); setTimeout(() => card.remove(), 500); }, 6000);
   }
 
   // ══════════════════════════════════════════════════════════
@@ -1015,6 +1274,7 @@ export default class Game {
     this.voteHistory = []; this.whispersUsed = 0; this.ghostClueUsed = false;
     this.currentNightEvent = null; this.suspicionVotes = {}; this.mySuspicionVotes = new Set();
     this.roundRecap = {}; this.lastStandActive = false;
+    this.detectiveDead = false; this.investigationRequests = []; this.pendingInvestRequest = null;
     clearInterval(this.graceInterval);
     chat.clear(); ui.clearLog(); this._showLobby();
     if (this.isHost) this.net.relay({ t: 'PL', pl: this.players.map(p => ({ id: p.id, name: p.name, avatar: p.avatar, alive: true })) });

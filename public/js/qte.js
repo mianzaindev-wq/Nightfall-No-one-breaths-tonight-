@@ -135,6 +135,48 @@ export function generateInvestClue(targetCharacter, targetPersona, targetRole, s
   return { success: true, text: `${targetPersona.name} has a solid alibi. Appears innocent.`, isFalse: false };
 }
 
+// ── SNOOPING CLUE GENERATION (Killer Counter-Intel) ─────────
+// When someone investigates, the killer gets a hint about who was snooping.
+// Better QTE = more thorough investigation = more visible to killer (risk/reward).
+export function generateSnoopClue(investigatorCharacter, investigatorPersona, score) {
+  // Failed investigation — no snooping detected
+  if (score < 0.3) return null;
+
+  // Vague: someone was asking questions
+  if (score < 0.6) {
+    const vague = [
+      'Someone was asking questions tonight...',
+      'You sense someone has been investigating...',
+      'Footsteps echoed near the crime scene...',
+      'A faint presence was felt near the evidence...',
+    ];
+    return { level: 'vague', text: `👁 ${vague[Math.floor(Math.random() * vague.length)]}` };
+  }
+
+  // Moderate: public trait hint
+  if (score < 0.85) {
+    const trait = getPublicTraitClue(investigatorCharacter);
+    const moderate = [
+      `Someone with ${trait} was seen snooping around.`,
+      `A figure matching ${trait} was spotted near the crime scene.`,
+      `Witnesses noticed ${trait} lurking near the evidence.`,
+    ];
+    return { level: 'moderate', text: `👁 ${moderate[Math.floor(Math.random() * moderate.length)]}` };
+  }
+
+  // Bold: persona name mentioned
+  if (score < 0.98) {
+    return { level: 'bold', text: `👁 A figure resembling ${investigatorPersona.name} was seen investigating the crime scene.` };
+  }
+
+  // Perfect QTE: 5% chance of near-identifying giveaway
+  if (Math.random() < 0.05) {
+    return { level: 'critical', text: `⚠ ${investigatorPersona.name} was caught red-handed investigating the crime scene!` };
+  }
+  // 95% of the time, still just bold
+  return { level: 'bold', text: `👁 A figure resembling ${investigatorPersona.name} was seen investigating nearby.` };
+}
+
 // ── VERIFICATION RESULT ──────────────────────────────────────
 // Detective verifies a piece of evidence. QTE score determines how
 // accurately the detective can assess the evidence.
