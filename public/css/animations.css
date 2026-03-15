@@ -1,0 +1,90 @@
+/* ═══════════════════════════════════════════════════════════════
+   NIGHTFALL — Animations
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Slide in from left */
+@keyframes sli {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Fade up */
+@keyframes fu {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Pulse (urgent) */
+@keyframes pu {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: .35; }
+}
+
+/* Pop in */
+@keyframes pop {
+  from { transform: scale(0) rotate(-12deg); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+
+/* Blood splat */
+@keyframes sp {
+  0%   { width: 0; height: 0; opacity: 1; }
+  100% { width: 400px; height: 400px; opacity: 0; }
+}
+
+/* Screen shake */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%      { transform: translateX(-6px) rotate(-.5deg); }
+  20%      { transform: translateX(5px) rotate(.5deg); }
+  30%      { transform: translateX(-4px); }
+  40%      { transform: translateX(3px); }
+  50%      { transform: translateX(-2px); }
+  60%      { transform: translateX(1px); }
+}
+.screen-shake { animation: shake .5s ease-out; }
+
+/* Fade in general */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Dawn transition */
+@keyframes dawn {
+  0%   { background: #000; }
+  40%  { background: #1a0505; }
+  70%  { background: #1a1005; }
+  100% { background: var(--ink); }
+}
+.dawn-transition {
+  animation: dawn 2s ease-out forwards;
+}
+
+/* Glow pulse for role reminder */
+@keyframes glowPulse {
+  0%, 100% { box-shadow: none; }
+  50%      { box-shadow: 0 0 12px rgba(201,168,76,.3); }
+}
+.role-reminder { animation: glowPulse 3s ease-in-out infinite; }
+
+/* Vote cast checkmark */
+@keyframes voteCheck {
+  0%   { transform: scale(0); opacity: 0; }
+  60%  { transform: scale(1.2); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.vote-confirmed { animation: voteCheck .4s cubic-bezier(.34,1.56,.64,1); }
+
+/* Particle float (for victory screen) */
+@keyframes particleFloat {
+  0%   { transform: translateY(0) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(-120vh) rotate(720deg); opacity: 0; }
+}
+.particle {
+  position: fixed;
+  pointer-events: none;
+  z-index: 9001;
+  font-size: 1.2rem;
+  animation: particleFloat linear forwards;
+}

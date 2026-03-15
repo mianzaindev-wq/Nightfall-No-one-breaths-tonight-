@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#06060a">
+  <meta name="description" content="NightFall — A real-time multiplayer murder mystery game. No one breathes tonight.">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>NIGHTFALL — The Murder Mystery Game</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="css/variables.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/screens.css">
+  <link rel="stylesheet" href="css/animations.css">
+</head>
+<body>
+  <canvas id="bgC"></canvas>
+
+  <!-- Connection Status -->
+  <div class="conn-status" id="connStatus">
+    <span class="dot dwt"></span>
+    <span id="connText">CONNECTING</span>
+  </div>
+
+  <!-- Sound Toggle -->
+  <button class="sound-toggle" id="soundToggle" title="Toggle sound" aria-label="Toggle sound">🔊</button>
+
+  <!-- Toast -->
+  <div id="toast"></div>
+
+  <!-- Role Reminder (shown during Day) -->
+  <div class="role-reminder hidden" id="roleReminder">
+    <span class="role-emoji" id="roleReminderIcon"></span>
+    <span id="roleReminderText"></span>
+  </div>
+
+  <!-- ═══ NIGHT OVERLAY ═══ -->
+  <div id="nightOv">
+    <div class="nbig" id="nBig">NIGHT DESCENDS</div>
+    <div class="nsm" id="nSm">DARKNESS SWALLOWS THE TOWN</div>
+    <div id="nAct"></div>
+  </div>
+
+  <!-- ═══ LANDING ═══ -->
+  <div id="s-land" class="screen active">
+    <div class="title">NIGHT<em>FALL</em></div>
+    <div class="tagline">◈ The Murder Mystery Game ◈</div>
+    <div class="card" style="margin-top:44px">
+      <label class="lbl">Choose Your Avatar</label>
+      <div class="avatar-grid" id="avatarGrid"></div>
+      <label class="lbl">Your Name</label>
+      <input id="iName" type="text" placeholder="Enter your name..." maxlength="20" autocomplete="off">
+      <button class="btn btn-red" id="btnCreate" aria-label="Create new lobby">🩸 Create Lobby</button>
+      <div class="divider" style="text-align:center;margin:11px 0;color:var(--pale-dim);font-size:.85rem">— or —</div>
+      <label class="lbl">Lobby Code</label>
+      <input id="iCode" type="text" placeholder="Enter 6-character code..." maxlength="6" style="text-transform:uppercase;letter-spacing:.2em" autocomplete="off">
+      <button class="btn btn-out" id="btnJoin" aria-label="Join existing lobby">Enter the Shadows</button>
+    </div>
+    <div class="tc mt16 muted footer-info">
+      <div>4–16 players • Play across any device on the same network</div>
+      <button class="btn btn-sm btn-out mt8" id="btnRules" style="margin:10px auto 0;display:inline-flex" aria-label="How to play">📜 How to Play</button>
+      <div class="stats-bar" id="statsBar"></div>
+    </div>
+  </div>
+
+  <!-- ═══ LOBBY ═══ -->
+  <div id="s-lobby" class="screen">
+    <div class="title" style="font-size:clamp(1.8rem,5vw,3rem)">NIGHT<em>FALL</em></div>
+    <div class="card mt16" style="max-width:520px">
+      <div class="tc">
+        <label class="lbl" style="text-align:center">Lobby Code — Share This</label>
+        <div class="lcode" id="lCode" title="Click to copy">——</div>
+        <button class="btn btn-out btn-sm" id="btnCopy" style="margin:0 auto 14px" aria-label="Copy lobby code">📋 Copy</button>
+      </div>
+      <hr>
+      <div class="lobby-header">
+        <label class="lbl" style="margin:0">Players <span id="pcnt" class="chip ca">0</span></label>
+        <div style="display:flex;gap:6px;align-items:center">
+          <span id="lMsg" class="muted" style="font-size:.8rem">Waiting...</span>
+          <button class="btn btn-icon" id="btnSettings" title="Game Settings" aria-label="Game settings" style="display:none">⚙</button>
+        </div>
+      </div>
+      <ul class="plist" id="lList"></ul>
+      <hr>
+      <!-- Host Controls -->
+      <div id="hCtrl" style="display:none">
+        <div class="muted tc mb8" style="font-size:.8rem">Minimum 4 players to start</div>
+        <button class="btn btn-red" id="startBtn" disabled aria-label="Start game">Begin the Night</button>
+      </div>
+      <!-- Guest Controls -->
+      <div id="gCtrl" style="display:none;text-align:center" class="muted">Waiting for host to begin...</div>
+    </div>
+  </div>
+
+  <!-- ═══ ROLE REVEAL ═══ -->
+  <div id="s-role" class="screen">
+    <div class="card" style="max-width:420px">
+      <label class="lbl" style="display:block;text-align:center;margin-bottom:14px">Your Role This Night</label>
+      <div id="rContent"></div>
+      <button class="btn btn-red" id="readyBtn" aria-label="Mark as ready">I Am Ready</button>
+    </div>
+  </div>
+
+  <!-- ═══ DAY ═══ -->
+  <div id="s-day" class="screen">
+    <h2 style="color:var(--blood-bright)">☀ DAY BREAKS</h2>
+    <div class="timer" id="dTimer">60</div>
+    <div class="card" style="max-width:560px">
+      <div class="chips" id="dChips"></div>
+      <div class="dn" id="dAnnounce" style="display:none">💀 <span id="dName"></span> was found dead this morning...</div>
+      <!-- Doctor save notice -->
+      <div class="dn" id="dSaved" style="display:none;border-color:var(--success);background:rgba(76,175,80,.08);color:var(--success-light)">🩺 <span id="dSavedName"></span> was attacked but miraculously survived!</div>
+      <div class="cluebox" id="cBox" style="display:none">
+        <strong style="font-family:var(--font-mono);font-size:.75rem;font-style:normal">🔍 DETECTIVE'S REPORT</strong><br>
+        <span id="cText"></span>
+      </div>
+      <hr>
+      <!-- Chat -->
+      <div class="chat-panel" id="chatPanel">
+        <label class="lbl mb8">💬 Discussion</label>
+        <div class="chat-messages" id="chatMessages"></div>
+        <div class="chat-input-row">
+          <input id="chatInput" type="text" placeholder="Type a message..." maxlength="200" autocomplete="off">
+          <button class="btn btn-sm btn-out" id="btnChat" aria-label="Send message">→</button>
+        </div>
+      </div>
+      <hr>
+      <label class="lbl mb8">Event Log</label>
+      <div class="log" id="dLog"></div>
+      <hr>
+      <label class="lbl mb8">Vote — Who is the Killer?</label>
+      <div id="vList"></div>
+      <div class="muted tc mt8" style="font-size:.85rem" id="vStatus"></div>
+      <button class="btn btn-red mt16" id="cvBtn" style="display:none" aria-label="Confirm vote">⚖ Confirm Vote</button>
+      <div class="dn mt16" id="deadMsg" style="display:none">💀 You were killed — you may observe but cannot vote.</div>
+      <!-- Last words input for killed player -->
+      <div id="lastWordsPanel" style="display:none" class="mt8">
+        <label class="lbl mb8">💀 Your Last Words (10s)</label>
+        <div class="chat-input-row">
+          <input id="lastWordsInput" type="text" placeholder="Any final words?" maxlength="150" autocomplete="off">
+          <button class="btn btn-sm btn-danger" id="btnLastWords" aria-label="Send last words">💀</button>
+        </div>
+        <div class="timer mt8" id="lwTimer" style="font-size:1.2rem;color:var(--blood-bright)">10</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ VERDICT ═══ -->
+  <div id="s-verdict" class="screen">
+    <h2 style="color:var(--gold)">⚖ VERDICT</h2>
+    <div class="card" style="max-width:500px">
+      <div id="vContent"></div>
+      <hr>
+      <div id="vBars"></div>
+      <div class="muted tc mt16" style="font-size:.8rem">Next phase in <span id="vcT">6</span>s...</div>
+    </div>
+  </div>
+
+  <!-- ═══ GAME OVER ═══ -->
+  <div id="s-over" class="screen">
+    <div id="oBanner"></div>
+    <div class="card mt16" style="max-width:500px">
+      <label class="lbl" style="display:block;text-align:center;margin-bottom:14px">The Truth Revealed</label>
+      <div id="fReveal"></div>
+      <hr>
+      <button class="btn btn-red mt16" id="btnPlayAgain" aria-label="Play again">Play Again</button>
+    </div>
+  </div>
+
+  <!-- ═══ SETTINGS MODAL ═══ -->
+  <div class="modal-overlay" id="settingsModal">
+    <div class="modal">
+      <button class="modal-close" id="settingsClose" aria-label="Close settings">&times;</button>
+      <h3>⚙ Game Settings</h3>
+
+      <div class="settings-group">
+        <label class="lbl">Timers</label>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-label">Day Phase</div>
+            <div class="toggle-desc">Discussion & voting time</div>
+          </div>
+          <select id="setDayTime" style="width:80px;text-align:center;margin:0;min-height:36px;font-size:.85rem">
+            <option value="30">30s</option>
+            <option value="45">45s</option>
+            <option value="60" selected>60s</option>
+            <option value="90">90s</option>
+            <option value="120">120s</option>
+          </select>
+        </div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-label">Night Phase</div>
+            <div class="toggle-desc">Time for night actions</div>
+          </div>
+          <select id="setNightTime" style="width:80px;text-align:center;margin:0;min-height:36px;font-size:.85rem">
+            <option value="20">20s</option>
+            <option value="30">30s</option>
+            <option value="45" selected>45s</option>
+            <option value="60">60s</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <label class="lbl">Optional Roles <span class="chip cd" style="font-size:.5rem">OFF BY DEFAULT</span></label>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-label">🩺 Doctor</div>
+            <div class="toggle-desc">Can protect one player per night from being killed</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="setDoctor">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-label">🤡 Jester</div>
+            <div class="toggle-desc">Wins if voted out — adds a bluffing layer</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="setJester">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <label class="lbl">Other</label>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-label">Hide Vote Tallies</div>
+            <div class="toggle-desc">Don't show vote counts until voting ends</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="setHideVotes" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <button class="btn btn-out mt8" id="settingsSave">Save Settings</button>
+    </div>
+  </div>
+
+  <!-- ═══ HOW TO PLAY MODAL ═══ -->
+  <div class="modal-overlay" id="rulesModal">
+    <div class="modal">
+      <button class="modal-close" id="rulesClose" aria-label="Close rules">&times;</button>
+      <h3>📜 How to Play</h3>
+
+      <div class="rules-section">
+        <h4>The Game</h4>
+        <p>NightFall is a social deduction game. Players are secretly assigned roles. Each night, killers strike. Each day, the town discusses and votes to eliminate a suspect. Find the killers before they outnumber you.</p>
+      </div>
+
+      <div class="rules-section">
+        <h4>Core Roles</h4>
+        <div class="role-card">
+          <div class="role-card-icon">🗡</div>
+          <div class="role-card-info">
+            <div class="role-card-name" style="color:var(--blood-bright)">Killer</div>
+            <div class="role-card-desc">Choose a victim each night. Blend in during the day. Win when killers equal or outnumber the living.</div>
+          </div>
+        </div>
+        <div class="role-card">
+          <div class="role-card-icon">🔍</div>
+          <div class="role-card-info">
+            <div class="role-card-name" style="color:var(--det-bright)">Detective</div>
+            <div class="role-card-desc">Investigate one player per night to learn if they are suspicious. Share findings with the town.</div>
+          </div>
+        </div>
+        <div class="role-card">
+          <div class="role-card-icon">🧑</div>
+          <div class="role-card-info">
+            <div class="role-card-name" style="color:var(--success-light)">Civilian</div>
+            <div class="role-card-desc">No special powers. Observe, discuss, and vote wisely — the town's fate is in your hands.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="rules-section">
+        <h4>Optional Roles</h4>
+        <div class="role-card">
+          <div class="role-card-icon">🩺</div>
+          <div class="role-card-info">
+            <div class="role-card-name" style="color:var(--success-light)">Doctor</div>
+            <div class="role-card-desc">Each night, protect one player. If the killer targets them, they survive. Cannot self-protect two nights in a row.</div>
+          </div>
+        </div>
+        <div class="role-card">
+          <div class="role-card-icon">🤡</div>
+          <div class="role-card-info">
+            <div class="role-card-name" style="color:var(--warn)">Jester</div>
+            <div class="role-card-desc">An agent of chaos. The Jester wins the game if they are voted out during the day. The game continues for others.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="rules-section">
+        <h4>Game Flow</h4>
+        <p>🌙 <strong>Night:</strong> Killers choose a victim. Detective investigates. Doctor protects.</p>
+        <p>☀ <strong>Day:</strong> The victim is announced. Players discuss and vote to execute a suspect.</p>
+        <p>⚖ <strong>Verdict:</strong> The player with the most votes is eliminated. Their role is revealed.</p>
+        <p>🔄 <strong>Repeat</strong> until one side wins.</p>
+      </div>
+
+      <button class="btn btn-red mt8" id="rulesOk">Got It</button>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

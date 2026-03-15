@@ -1,0 +1,172 @@
+/* ═══════════════════════════════════════════════════════════════
+   NIGHTFALL — Screen Layouts
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Canvas Background ──────────────────────────────────────── */
+#bgC {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* ── Base Screen ────────────────────────────────────────────── */
+.screen {
+  display: none;
+  position: relative;
+  z-index: 10;
+  min-height: 100vh;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 50px 20px 40px;
+}
+.screen.active { display: flex; }
+
+/* ── Night Overlay ──────────────────────────────────────────── */
+#nightOv {
+  position: fixed;
+  inset: 0;
+  z-index: 800;
+  background: #000;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 30px;
+}
+#nightOv.on { display: flex; }
+
+.nbig {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 7vw, 4rem);
+  color: var(--blood-bright);
+  text-shadow: var(--blood-glow);
+  opacity: 0;
+  animation: fu 2s forwards .4s;
+}
+.nsm {
+  color: rgba(255,255,255,.25);
+  font-family: var(--font-mono);
+  font-size: .65rem;
+  letter-spacing: .3em;
+  opacity: 0;
+  animation: fu 2s forwards 1.2s;
+  margin-top: 6px;
+}
+#nAct {
+  margin-top: 32px;
+  width: 100%;
+  max-width: 400px;
+  opacity: 0;
+  animation: fu 1s forwards 1.8s;
+  padding: 0 10px;
+}
+
+/* ── Landing Screen ─────────────────────────────────────────── */
+#s-land .card { margin-top: 44px; }
+#s-land .divider {
+  text-align: center;
+  margin: 11px 0;
+  color: var(--pale-dim);
+  font-size: .85rem;
+}
+#s-land .footer-info {
+  font-size: .8rem;
+}
+
+/* ── Lobby Screen ───────────────────────────────────────────── */
+#s-lobby .card { max-width: 520px; }
+#s-lobby .title { font-size: clamp(1.8rem, 5vw, 3rem); }
+
+.lobby-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+/* ── Role Screen ────────────────────────────────────────────── */
+#s-role .card { max-width: 420px; }
+
+/* ── Day Screen ─────────────────────────────────────────────── */
+#s-day .card { max-width: 560px; }
+
+/* ── Verdict Screen ─────────────────────────────────────────── */
+#s-verdict .card { max-width: 500px; }
+
+/* ── Game Over Screen ───────────────────────────────────────── */
+#s-over .card { max-width: 500px; }
+
+/* ── How to Play Modal ──────────────────────────────────────── */
+.rules-section {
+  margin-bottom: 18px;
+}
+.rules-section h4 {
+  font-family: var(--font-display);
+  font-size: .85rem;
+  color: var(--blood-bright);
+  margin-bottom: 8px;
+}
+.rules-section p {
+  font-size: .88rem;
+  line-height: 1.65;
+  color: var(--pale-dim);
+  margin-bottom: 6px;
+}
+.role-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  background: rgba(255,255,255,.02);
+  border: 1px solid rgba(201,168,76,.06);
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+}
+.role-card .role-card-icon { font-size: 1.6rem; line-height: 1; }
+.role-card .role-card-info { flex: 1; }
+.role-card .role-card-name {
+  font-family: var(--font-display);
+  font-size: .76rem;
+  margin-bottom: 3px;
+}
+.role-card .role-card-desc {
+  font-size: .78rem;
+  color: var(--pale-dim);
+  line-height: 1.5;
+}
+
+/* ── Game Stats Bar ─────────────────────────────────────────── */
+.stats-bar {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  margin-top: var(--space-md);
+  font-family: var(--font-mono);
+  font-size: .6rem;
+  letter-spacing: .08em;
+  color: var(--pale-dim);
+  text-transform: uppercase;
+}
+.stat-item { display: flex; align-items: center; gap: 4px; }
+.stat-value { color: var(--gold); }
+
+/* ── Responsive ─────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .screen { padding: 54px 14px 30px; }
+  .card { padding: 18px 14px; }
+  .btn { font-size: .7rem; }
+  .title { font-size: 2.2rem; }
+  .lcode { font-size: 2rem; letter-spacing: .2em; }
+  .avatar-grid { grid-template-columns: repeat(8, 1fr); gap: 4px; }
+  .avatar-option { font-size: 1.1rem; }
+  .chat-messages { max-height: 140px; }
+  .modal { padding: 20px 16px; }
+}
+
+@media (max-width: 360px) {
+  .lcode { font-size: 1.6rem; }
+  .avatar-grid { grid-template-columns: repeat(6, 1fr); }
+}

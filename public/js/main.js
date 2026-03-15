@@ -1,0 +1,187 @@
+// ═══════════════════════════════════════════════════════════════
+// NIGHTFALL — Main Entry Point
+// Wires together: Network, Game, UI, Audio, Canvas, Chat
+// ═══════════════════════════════════════════════════════════════
+
+import Network from './network.js';
+import Game from './game.js';
+import audio from './audio.js';
+import chat from './chat.js';
+import { initCanvas } from './canvas.js';
+import { AVATARS } from './roles.js';
+import * as ui from './ui.js';
+
+// ── Initialize ───────────────────────────────────────────────
+const net = new Network();
+const canvasCtrl = initCanvas();
+const game = new Game(net, canvasCtrl);
+
+let selectedAvatar = AVATARS[Math.floor(Math.random() * AVATARS.length)];
+
+// ── Connect to Server ────────────────────────────────────────
+net.on('status', (status) => {
+  ui.updateConnStatus(status);
+});
+net.connect();
+
+// ── Init Audio on First Click ────────────────────────────────
+document.addEventListener('click', () => {
+  audio.init();
+  audio.resume();
+}, { once: true });
+
+// ── Sound Toggle ─────────────────────────────────────────────
+ui.updateSoundToggle(audio.isMuted());
+document.getElementById('soundToggle').addEventListener('click', () => {
+  const muted = audio.toggleMute();
+  ui.updateSoundToggle(muted);
+});
+
+// ── Avatar Selection ─────────────────────────────────────────
+ui.renderAvatarGrid(selectedAvatar, (avatar) => {
+  selectedAvatar = avatar;
+  ui.renderAvatarGrid(selectedAvatar, arguments.callee); // re-render
+});
+// Better: use a stable callback
+function onAvatarSelect(avatar) {
+  selectedAvatar = avatar;
+  ui.renderAvatarGrid(selectedAvatar, onAvatarSelect);
+}
+ui.renderAvatarGrid(selectedAvatar, onAvatarSelect);
+
+// ── Game Stats ───────────────────────────────────────────────
+ui.renderStats(game.getStats());
+
+// ── Landing Buttons ──────────────────────────────────────────
+document.getElementById('btnCreate').addEventListener('click', () => {
+  const name = document.getElementById('iName').value.trim();
+  if (!name) { ui.toast('Enter your name first', true); return; }
+  if (net.status !== 'connected') { ui.toast('Not connected to server', true); return; }
+  game.createLobby(name, selectedAvatar);
+});
+
+document.getElementById('btnJoin').addEventListener('click', () => {
+  const name = document.getElementById('iName').value.trim();
+  const code = document.getElementById('iCode').value.trim().toUpperCase();
+  if (!name) { ui.toast('Enter your name first', true); return; }
+  if (!code || code.length < 4) { ui.toast('Enter a valid lobby code', true); return; }
+  if (net.status !== 'connected') { ui.toast('Not connected to server', true); return; }
+  game.joinLobby(name, selectedAvatar, code);
+});
+
+// ── Lobby Buttons ────────────────────────────────────────────
+document.getElementById('btnCopy').addEventListener('click', () => {
+  const code = document.getElementById('lCode').textContent;
+  navigator.clipboard?.writeText(code).then(() => ui.toast('Copied!')).catch(() => ui.toast(code));
+});
+
+document.getElementById('lCode').addEventListener('click', () => {
+  const code = document.getElementById('lCode').textContent;
+  navigator.clipboard?.writeText(code).then(() => ui.toast('Copied!')).catch(() => ui.toast(code));
+});
+
+document.getElementById('startBtn').addEventListener('click', () => {
+  game.hostStart();
+});
+
+// ── Role Screen ──────────────────────────────────────────────
+document.getElementById('readyBtn').addEventListener('click', () => {
+  game.pressReady();
+});
+
+// ── Day Screen — Vote ────────────────────────────────────────
+document.getElementById('cvBtn').addEventListener('click', () => {
+  game.confirmVote();
+});
+
+// ── Day Screen — Chat ────────────────────────────────────────
+function sendChatMsg() {
+  const input = document.getElementById('chatInput');
+  if (!input) return;
+  game.sendChat(input.value);
+  input.value = '';
+  input.focus();
+}
+
+document.getElementById('btnChat').addEventListener('click', sendChatMsg);
+document.getElementById('chatInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') sendChatMsg();
+});
+
+// ── Last Words ───────────────────────────────────────────────
+function sendLastWords() {
+  const input = document.getElementById('lastWordsInput');
+  if (!input) return;
+  game.sendLastWords(input.value);
+  input.value = '';
+}
+
+document.getElementById('btnLastWords').addEventListener('click', sendLastWords);
+document.getElementById('lastWordsInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') sendLastWords();
+});
+
+// ── Game Over — Play Again ───────────────────────────────────
+document.getElementById('btnPlayAgain').addEventListener('click', () => {
+  game.backToLobby();
+});
+
+// ── Settings Modal ───────────────────────────────────────────
+document.getElementById('btnSettings').addEventListener('click', () => {
+  // Populate current settings
+  document.getElementById('setDayTime').value = game.settings.dayTime;
+  document.getElementById('setNightTime').value = game.settings.nightTime;
+  document.getElementById('setDoctor').checked = game.settings.doctor;
+  document.getElementById('setJester').checked = game.settings.jester;
+  document.getElementById('setHideVotes').checked = game.settings.hideVotes;
+  document.getElementById('settingsModal').classList.add('open');
+});
+
+document.getElementById('settingsClose').addEventListener('click', () => {
+  document.getElementById('settingsModal').classList.remove('open');
+});
+
+document.getElementById('settingsSave').addEventListener('click', () => {
+  game.updateSettings({
+    dayTime: parseInt(document.getElementById('setDayTime').value),
+    nightTime: parseInt(document.getElementById('setNightTime').value),
+    doctor: document.getElementById('setDoctor').checked,
+    jester: document.getElementById('setJester').checked,
+    hideVotes: document.getElementById('setHideVotes').checked,
+  });
+  document.getElementById('settingsModal').classList.remove('open');
+  ui.toast('Settings saved');
+});
+
+// ── Rules Modal ──────────────────────────────────────────────
+document.getElementById('btnRules').addEventListener('click', () => {
+  document.getElementById('rulesModal').classList.add('open');
+});
+
+document.getElementById('rulesClose').addEventListener('click', () => {
+  document.getElementById('rulesModal').classList.remove('open');
+});
+
+document.getElementById('rulesOk').addEventListener('click', () => {
+  document.getElementById('rulesModal').classList.remove('open');
+});
+
+// Close modals on overlay click
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) overlay.classList.remove('open');
+  });
+});
+
+// ── Keyboard Shortcuts ───────────────────────────────────────
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    if (document.getElementById('s-land').classList.contains('active')) {
+      const c = document.getElementById('iCode').value.trim();
+      c ? document.getElementById('btnJoin').click() : document.getElementById('btnCreate').click();
+    }
+  }
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
+  }
+});

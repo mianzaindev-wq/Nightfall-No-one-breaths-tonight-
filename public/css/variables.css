@@ -1,0 +1,52 @@
+/* ═══════════════════════════════════════════════════════════════
+   NIGHTFALL — Design Tokens
+   ═══════════════════════════════════════════════════════════════ */
+@import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700;900&family=Crimson+Text:ital,wght@0,400;0,600;1,400;1,600&family=Share+Tech+Mono&display=swap');
+
+:root {
+  /* Blood palette */
+  --blood: #8b0000;
+  --blood-bright: #cc0000;
+  --blood-glow: 0 0 20px rgba(139,0,0,.6), 0 0 60px rgba(139,0,0,.25);
+
+  /* Gold palette */
+  --gold: #c9a84c;
+  --gold-dim: #7a6030;
+  --gold-glow: 0 0 15px rgba(201,168,76,.5);
+
+  /* Ink & parchment */
+  --ink: #06060a;
+  --ink-surface: rgba(17,17,34,.97);
+  --ink-deep: rgba(6,6,10,.99);
+  --pale: #ede5d5;
+  --pale-dim: #9a8a78;
+
+  /* Detective palette */
+  --det: #1a6b8a;
+  --det-bright: #29a8d4;
+  --det-pale: #0a2535;
+  --det-glow: 0 0 20px rgba(41,168,212,.5);
+
+  /* Status colors */
+  --success: #4caf50;
+  --success-light: #81c784;
+  --warn: #ff9800;
+
+  /* Typography */
+  --font-display: 'Cinzel Decorative', serif;
+  --font-body: 'Crimson Text', Georgia, serif;
+  --font-mono: 'Share Tech Mono', monospace;
+
+  /* Spacing */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 14px;
+  --space-lg: 20px;
+  --space-xl: 32px;
+
+  /* Radius */
+  --radius: 3px;
+
+  /* Touch target minimum */
+  --touch-min: 44px;
+}
