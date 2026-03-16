@@ -1680,3 +1680,110 @@ hr { border: none; border-top: 1px solid rgba(201,168,76,.1); margin: 16px 0; }
   font-weight: 600;
 }
 
+/* ── Chat Tab Bar ─────────────────────────────────────────── */
+.chat-tab-bar { display: flex; gap: 4px; margin-bottom: 6px; }
+.chat-tab {
+  background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1);
+  color: var(--pale-dim); font-size: .7rem; padding: 4px 12px;
+  border-radius: 8px 8px 0 0; cursor: pointer; transition: all .2s;
+}
+.chat-tab:hover { background: rgba(201,168,76,.1); }
+.chat-tab-active { background: rgba(201,168,76,.15); border-color: var(--gold); color: var(--gold); font-weight: 600; }
+.chat-tab-killer { border-color: rgba(229,57,53,.2); }
+.chat-tab-killer.chat-tab-active { border-color: #e53935; color: #e53935; background: rgba(229,57,53,.1); }
+.chat-tab-det { border-color: rgba(66,165,245,.2); }
+.chat-tab-det.chat-tab-active { border-color: #42a5f5; color: #42a5f5; background: rgba(66,165,245,.1); }
+
+/* ── Team Chat Messages ───────────────────────────────────── */
+.chat-msg.team-killer { border-left: 2px solid #e53935; background: rgba(229,57,53,.05); padding-left: 8px; }
+.chat-msg.team-detective { border-left: 2px solid #42a5f5; background: rgba(66,165,245,.05); padding-left: 8px; }
+
+/* ── Resource HUD ─────────────────────────────────────────── */
+.resource-hud {
+  display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;
+  padding: 6px 12px; margin: 6px 0;
+  background: rgba(0,0,0,.3); border: 1px solid rgba(201,168,76,.15);
+  border-radius: 8px; font-size: .7rem;
+}
+.rh-item { color: var(--pale-dim); white-space: nowrap; }
+
+/* ── Game Hub Modal ───────────────────────────────────────── */
+.gh-card {
+  max-width: 550px; max-height: 85vh; display: flex; flex-direction: column;
+}
+.gh-header { text-align: center; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,.08); }
+.gh-title { font-family: var(--font-display); font-size: 1.1rem; color: var(--gold); letter-spacing: 2px; margin-bottom: 6px; }
+.gh-tabs { display: flex; gap: 4px; justify-content: center; flex-wrap: wrap; }
+.gh-tab {
+  background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1);
+  color: var(--pale-dim); font-size: .7rem; padding: 5px 14px;
+  border-radius: 6px; cursor: pointer; transition: all .2s;
+}
+.gh-tab:hover { background: rgba(201,168,76,.1); color: var(--gold); }
+.gh-tab-active { background: rgba(201,168,76,.2); border-color: var(--gold); color: var(--gold); font-weight: 600; }
+.gh-body { flex: 1; overflow-y: auto; padding: 10px 0; min-height: 200px; }
+.gh-close { margin-top: 8px; width: 100%; }
+.gh-section-title { font-family: var(--font-display); font-size: .9rem; color: var(--gold); letter-spacing: 1.5px; margin-bottom: 8px; text-align: center; }
+.gh-sub-title { font-size: .75rem; color: var(--pale-dim); margin: 10px 0 4px; font-weight: 600; border-bottom: 1px solid rgba(255,255,255,.05); padding-bottom: 3px; }
+
+/* ── Game Hub: Players Tab ────────────────────────────────── */
+.gh-player {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+  border-radius: 6px; margin: 2px 0; transition: opacity .2s;
+}
+.gh-alive { background: rgba(255,255,255,.03); }
+.gh-dead { background: rgba(229,57,53,.05); opacity: .5; }
+.gh-player-icon { font-size: 1.1rem; }
+.gh-player-name { flex: 1; font-size: .8rem; }
+.gh-role-tag { font-size: .65rem; color: var(--pale-dim); font-style: italic; }
+.gh-executed {
+  font-size: .6rem; font-weight: 700; color: #e53935; text-transform: uppercase;
+  padding: 1px 6px; border: 1px solid #e53935; border-radius: 4px; letter-spacing: 1px;
+}
+.gh-killed {
+  font-size: .6rem; font-weight: 700; color: #78909c; text-transform: uppercase;
+  padding: 1px 6px; border: 1px solid #78909c; border-radius: 4px; letter-spacing: 1px;
+}
+
+/* ── Game Hub: Dossier Tab ────────────────────────────────── */
+.gh-dossier-entry {
+  background: rgba(66,165,245,.05); border: 1px solid rgba(66,165,245,.15);
+  border-radius: 6px; padding: 8px; margin: 6px 0;
+}
+.gh-dossier-name { font-size: .8rem; font-weight: 600; color: #42a5f5; margin-bottom: 4px; }
+.gh-dossier-trait { font-size: .7rem; padding: 2px 0; color: var(--pale); }
+.gh-trait-label { color: var(--pale-dim); }
+.gh-trait-value { color: #e0e0e0; }
+
+/* ── Game Hub: Suspicion Tab ──────────────────────────────── */
+.gh-sus-row { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+.gh-sus-name { font-size: .75rem; min-width: 100px; }
+.gh-sus-bar { flex: 1; height: 8px; background: rgba(255,255,255,.08); border-radius: 4px; overflow: hidden; }
+.gh-sus-fill { height: 100%; background: linear-gradient(90deg, #f9a825, #e53935); border-radius: 4px; transition: width .3s; }
+.gh-sus-pct { font-size: .65rem; color: var(--pale-dim); min-width: 30px; text-align: right; }
+.gh-activity-alert {
+  font-size: .75rem; font-style: italic; color: var(--pale-dim);
+  padding: 6px 10px; background: rgba(255,255,255,.03);
+  border-left: 2px solid rgba(201,168,76,.3); margin: 4px 0;
+}
+.gh-vote-round { font-size: .7rem; padding: 3px 0; color: var(--pale-dim); }
+
+/* ── Forge Modal ──────────────────────────────────────────── */
+.forge-player {
+  background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08);
+  border-radius: 6px; padding: 8px; margin: 6px 0;
+}
+.forge-player-name { font-size: .8rem; font-weight: 600; color: var(--gold); margin-bottom: 6px; }
+.forge-trait-btn {
+  display: block; width: 100%; text-align: left; margin: 3px 0;
+  font-size: .7rem; padding: 4px 8px; border-color: rgba(229,57,53,.2);
+  background: rgba(229,57,53,.03);
+}
+.forge-trait-btn:hover { background: rgba(229,57,53,.1); border-color: #e53935; }
+
+/* ── Evidence Cross-Reference Badge ───────────────────────── */
+.eb-cross-ref {
+  font-size: .6rem; color: #ffd700; border: 1px solid rgba(255,215,0,.3);
+  padding: 1px 5px; border-radius: 4px; margin-left: 4px;
+  background: rgba(255,215,0,.08); animation: pu 2s infinite;
+}

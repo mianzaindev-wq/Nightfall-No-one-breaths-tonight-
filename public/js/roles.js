@@ -65,17 +65,25 @@ export const AVATARS = [
  */
 export function assignRoles(players, settings = {}) {
   const n = players.length;
-  const killerCount = Math.max(1, Math.floor(n / 4));
-  const detCount = Math.max(1, Math.floor(n / 5));
-  
+
+  // Explicit scaling table
+  let killerCount, detCount, docCount;
+  if (n >= 26)      { killerCount = 3; detCount = 3; docCount = 2; }
+  else if (n >= 22) { killerCount = 3; detCount = 2; docCount = 2; }
+  else if (n >= 17) { killerCount = 2; detCount = 2; docCount = 1; }
+  else if (n >= 11) { killerCount = 2; detCount = 1; docCount = 1; }
+  else              { killerCount = 1; detCount = 1; docCount = 1; }
+
   let roles = [];
 
   // Core roles
   for (let i = 0; i < killerCount; i++) roles.push('killer');
   for (let i = 0; i < detCount; i++) roles.push('detective');
 
-  // Optional roles (one of each max)
-  if (settings.doctor && roles.length < n) roles.push('doctor');
+  // Optional roles
+  if (settings.doctor && roles.length < n) {
+    for (let i = 0; i < docCount && roles.length < n; i++) roles.push('doctor');
+  }
   if (settings.jester && roles.length < n) roles.push('jester');
 
   // Fill remaining with civilians

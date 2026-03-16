@@ -202,6 +202,41 @@ export function generateSnoopClue(investigatorCharacter, investigatorPersona, sc
   return { level: 'bold', text: `👁 A figure resembling ${investigatorPersona.name} was seen investigating nearby.` };
 }
 
+// ── DETECTIVE HIDDEN TRAIT INVESTIGATION ─────────────────────
+// Detective spends a match-limited action to reveal hidden traits of a target.
+// Better QTE score = more traits revealed with higher accuracy.
+export function generateTraitInvestResult(targetCharacter, score) {
+  const hidden = targetCharacter.hidden;
+  if (!hidden) return { success: false, traits: [], text: 'Investigation failed — no data found.' };
+
+  const traitKeys = ['perfume', 'mark', 'walkStyle', 'voice', 'habit', 'secretItem'];
+  const traitLabels = { perfume: 'Scent', mark: 'Distinguishing Mark', walkStyle: 'Gait', voice: 'Voice', habit: 'Nervous Habit', secretItem: 'Hidden Possession' };
+
+  if (score < 0.25) {
+    return { success: false, traits: [], text: 'Your investigation was inconclusive. No hidden traits discovered.' };
+  }
+
+  // Shuffle trait keys for randomness
+  const shuffled = [...traitKeys].sort(() => Math.random() - 0.5);
+  const revealed = [];
+
+  if (score >= 0.8) {
+    // Excellent: reveal 2 traits clearly
+    revealed.push({ key: shuffled[0], label: traitLabels[shuffled[0]], value: hidden[shuffled[0]] });
+    revealed.push({ key: shuffled[1], label: traitLabels[shuffled[1]], value: hidden[shuffled[1]] });
+  } else if (score >= 0.5) {
+    // Good: reveal 1 trait clearly, 1 vague
+    revealed.push({ key: shuffled[0], label: traitLabels[shuffled[0]], value: hidden[shuffled[0]] });
+    revealed.push({ key: shuffled[1], label: traitLabels[shuffled[1]], value: '(unclear — something about their ' + traitLabels[shuffled[1]].toLowerCase() + '...)' });
+  } else {
+    // Mediocre: reveal 1 trait only
+    revealed.push({ key: shuffled[0], label: traitLabels[shuffled[0]], value: hidden[shuffled[0]] });
+  }
+
+  const text = revealed.map(t => `${t.label}: ${t.value}`).join(' • ');
+  return { success: true, traits: revealed, text: `🕵 Discovered: ${text}` };
+}
+
 // ── VERIFICATION RESULT ──────────────────────────────────────
 // Detective verifies a piece of evidence. QTE score determines how
 // accurately the detective can assess the evidence.

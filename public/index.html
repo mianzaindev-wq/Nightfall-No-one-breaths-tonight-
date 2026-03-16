@@ -152,13 +152,14 @@
       <div id="cBox" style="display:none">
         <span id="cText"></span>
       </div>
+      <div id="resourceHUD" class="resource-hud" style="display:none"></div>
       <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
-        <button class="btn btn-sm btn-out mt8" id="btnTownBoard" style="display:none" aria-label="View Town Board">📋 Town Board</button>
-        <button class="btn btn-sm btn-out mt8" id="btnEvidenceWindow" style="display:none" aria-label="View Evidence">🔍 Evidence Board</button>
+        <button class="btn btn-sm btn-out mt8" id="btnGameHub" style="display:none" aria-label="Open Game Hub">📋 Game Hub</button>
       </div>
       <hr>
       <!-- Chat -->
       <div class="chat-panel" id="chatPanel">
+        <div class="chat-tab-bar" id="chatTabs"></div>
         <label class="lbl mb8">💬 Discussion</label>
         <div class="chat-messages" id="chatMessages"></div>
         <div class="chat-input-row">

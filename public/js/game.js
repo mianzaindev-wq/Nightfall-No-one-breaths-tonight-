@@ -6,7 +6,7 @@
 
 import { assignRoles, getRoleInfo } from './roles.js';
 import { assignCharacters, getPublicDesc, getHiddenDesc } from './avatar.js';
-import { generateKillClue, generateKillClues, generateInvestClue, generateSnoopClue, computeVerification, formatEvidence, runQTE, getKillDifficulty, getInvestigateDifficulty, getVerifyDifficulty } from './qte.js';
+import { generateKillClue, generateKillClues, generateInvestClue, generateSnoopClue, generateTraitInvestResult, computeVerification, formatEvidence, runQTE, getKillDifficulty, getInvestigateDifficulty, getVerifyDifficulty } from './qte.js';
 import audio from './audio.js';
 import chat from './chat.js';
 import * as ui from './ui.js';
@@ -99,6 +99,20 @@ export default class Game {
     this.investigationRequests = []; // { id, playerId, allows:[], denies:[], status }
     this.pendingInvestRequest = null; // current request being voted on
 
+    // Team chat
+    this.teamChatUsed = 0; // per-phase counter
+    this.teamSuspicionCounters = { killer: 0, detective: 0 }; // cumulative match total
+
+    // Killer forging
+    this.forgesUsed = 0; // 1 per match
+
+    // Detective trait investigation
+    this.traitInvestsUsed = 0; // 3 per match
+    this.dossier = {}; // { playerId: [{ key, label, value }] }
+
+    // Max lobby
+    this.maxLobbySize = 30;
+
     this.stats = JSON.parse(localStorage.getItem('nf_stats') || '{"games":0,"wins":0}');
     this._setupNetHandlers();
   }
@@ -170,6 +184,36 @@ export default class Game {
     n.on('INVEST_VOTE', d => { if (this.isHost) this._onInvestVote(d); });
     n.on('INVEST_DECISION', d => { this._onInvestDecision(d); });
     n.on('SNOOP_ALERT', d => { if (this.myRole === 'killer') this._showSnoopAlert(d); });
+    // Team chat
+    n.on('TEAM_CHAT', d => {
+      if (this.isHost) {
+        // Relay only to same-team members
+        const team = d.team;
+        this.teamSuspicionCounters[team] = (this.teamSuspicionCounters[team] || 0) + 1;
+        this._checkSuspicionEscalation(team);
+        this.players.forEach(p => {
+          if (p.role === team && p.id !== d._from && !p._isBot) {
+            this.net.sendTo(p.id, { t: 'TEAM_CHAT', team: d.team, name: d.name, text: d.text });
+          }
+        });
+        // Also show to self if host is same team
+        if (this.myRole === team) chat.addMessage(d.name, d.text, `team-${team}`, team);
+      } else {
+        chat.addMessage(d.name, d.text, `team-${d.team}`, d.team);
+      }
+    });
+    n.on('SUSPICION_MSG', d => {
+      chat.addMessage('', d.text, 'system');
+      ui.addLog(d.text, 'ls');
+    });
+    n.on('NEW_EVIDENCE', d => {
+      if (d.evidence) {
+        // Only add if not already in ledger
+        if (!this.evidenceLedger.find(e => e.id === d.evidence.id)) {
+          this.evidenceLedger.push(d.evidence);
+        }
+      }
+    });
     n.on('DOC_PROTECT', d => { if (this.isHost) this.doctorTarget = d.targetId; });
     n.on('VOTE', d => { if (this.isHost) { this.votes[d._from] = d.targetId; this.net.relay({ t: 'VOTE_UPDATE', votes: this.votes }); this._checkVoteDone(); } });
     n.on('CHAT', d => { chat.addMessage(d.persona || d.name, d.text, d.chatType || 'normal'); audio.play('chat'); });
@@ -214,7 +258,11 @@ export default class Game {
     });
   }
 
-  _showRole(allies) { ui.show('s-role'); ui.renderRole(this.myRole, allies, this.myPersona, this.myCharacter); audio.play(this.myRole === 'killer' ? 'bad' : 'good'); ui.hideRoleReminder(); }
+  _showRole(allies) {
+    ui.show('s-role'); ui.renderRole(this.myRole, allies, this.myPersona, this.myCharacter); audio.play(this.myRole === 'killer' ? 'bad' : 'good'); ui.hideRoleReminder();
+    // Set team chat tabs
+    chat.setTeamRole(this.myRole);
+  }
 
   pressReady() { document.getElementById('readyBtn').disabled = true; document.getElementById('readyBtn').textContent = 'Waiting...'; if (this.isHost) { this.readySet.add(this.myId); this._checkReady(); } else this.net.relay({ t: 'READY' }); }
   _checkReady() {
@@ -531,6 +579,9 @@ export default class Game {
   _onInvestigate(d) {
     d.pa.forEach(u => { const p = this.players.find(x => x.id === u.id); if (p) p.alive = u.alive; });
     this.phase = 'investigate';
+    // Reset per-phase counters
+    this.teamChatUsed = 0;
+    this._renderResourceHUD();
     this.skipVotes = new Set(); this.mySkipVoted = false;
     this.investigationRequests = []; this.pendingInvestRequest = null;
     if (d.detectiveDead) this.detectiveDead = true;
@@ -693,9 +744,24 @@ export default class Game {
       html += `<div style="margin-top:8px"><div class="evidence-label" style="margin-bottom:4px">🔬 VERIFY EVIDENCE (detective only)</div><div id="verifyList"></div></div>`;
     }
 
+    // Detective: Investigate Hidden Traits (3/match)
+    if (isDet && this.traitInvestsUsed < 3) {
+      html += `<div style="margin-top:8px"><button class="btn btn-sm btn-out" id="btnTraitInvest" style="width:100%">🕵 Investigate Hidden Traits (${3 - this.traitInvestsUsed}/3 left)</button></div>`;
+    }
+
+    // Killer: Forge Evidence (1/match)
+    if (isKiller && this.forgesUsed < 1) {
+      html += `<div style="margin-top:8px"><button class="btn btn-sm btn-out" id="btnForge" style="width:100%;border-color:rgba(229,57,53,.3);color:#e53935">🔨 Forge Evidence (${1 - this.forgesUsed}/1 left)</button></div>`;
+    }
     html += `<div id="investQTE" style="display:none"></div><div id="investResult" style="display:none" class="evidence-box"></div>`;
     investDiv.innerHTML = html;
     logArea.parentNode.insertBefore(investDiv, logArea);
+
+    // Wire forge/trait buttons
+    const forgeBtn = document.getElementById('btnForge');
+    if (forgeBtn) forgeBtn.onclick = () => this._forgeEvidence();
+    const traitBtn = document.getElementById('btnTraitInvest');
+    if (traitBtn) traitBtn.onclick = () => this._investigateTraits();
 
     // Populate suspect buttons
     const il = document.getElementById('investList');
@@ -1056,6 +1122,9 @@ export default class Game {
   _onDinner(d) {
     d.pa.forEach(u => { const p = this.players.find(x => x.id === u.id); if (p) p.alive = u.alive; });
     this.phase = 'dinner'; this.votes = {}; this.selVote = null; this.voted = false;
+    // Reset per-phase counters
+    this.teamChatUsed = 0;
+    this._renderResourceHUD();
 
     const h2 = document.querySelector('#s-day h2');
     if (h2) {
@@ -1341,6 +1410,8 @@ export default class Game {
     this.roundRecap = {}; this.lastStandActive = false;
     this.detectiveDead = false; this.investigationRequests = []; this.pendingInvestRequest = null;
     this._isRevote = false; this._revoteTiedIds = null;
+    this.teamChatUsed = 0; this.teamSuspicionCounters = { killer: 0, detective: 0 };
+    this.forgesUsed = 0; this.traitInvestsUsed = 0; this.dossier = {};
     clearInterval(this.graceInterval);
     chat.clear(); ui.clearLog(); this._showLobby();
     if (this.isHost) this.net.relay({ t: 'PL', pl: this.players.map(p => ({ id: p.id, name: p.name, avatar: p.avatar, alive: true })) });
@@ -1348,10 +1419,24 @@ export default class Game {
 
   sendChat(text) {
     if (!text.trim()) return;
-    if (this.phase !== 'dinner' && this.phase !== 'grace') { ui.toast('Chat is only available during socializing & dinner', true); return; }
+    const ch = chat.getActiveChannel();
     const me = this.players.find(p => p.id === this.myId);
     if (me && !me.alive) return;
     const pname = this.myPersona ? `${this.myPersona.icon} ${this.myPersona.name}` : this.myName;
+
+    // Team chat
+    if (ch === 'killer' || ch === 'detective') {
+      if (this.myRole !== ch) { ui.toast('You are not part of this team', true); return; }
+      if (this.teamChatUsed >= 3) { ui.toast('Team chat limit reached for this phase (3/3)', true); return; }
+      this.teamChatUsed++;
+      chat.addMessage(pname, text, `team-${ch}`, ch);
+      this.net.relay({ t: 'TEAM_CHAT', team: ch, name: pname, text });
+      this._renderResourceHUD();
+      return;
+    }
+
+    // Public chat
+    if (this.phase !== 'dinner' && this.phase !== 'grace' && this.phase !== 'investigate') { ui.toast('Chat is only available during socializing, investigation & dinner', true); return; }
     chat.addMessage(pname, text, 'normal');
     this.net.relay({ t: 'CHAT', persona: pname, text, chatType: 'normal' });
   }
@@ -1622,52 +1707,343 @@ export default class Game {
   // EVIDENCE BOARD (Cumulative)
   // ══════════════════════════════════════════════════════════
   _showEvidenceBoardButton() {
-    const chatPanel = document.getElementById('chatPanel');
-    if (!chatPanel) return;
-    let ebBtn = document.getElementById('evidenceBoardBtn');
-    if (ebBtn) return;
-    ebBtn = document.createElement('button');
-    ebBtn.id = 'evidenceBoardBtn';
-    ebBtn.className = 'btn btn-sm btn-out';
-    ebBtn.style.cssText = 'font-size:.7rem;padding:3px 10px;margin:4px 4px 4px 0';
-    ebBtn.textContent = `📋 Evidence Board (${this.evidenceLedger.length})`;
-    ebBtn.onclick = () => this._openEvidenceBoard();
-    chatPanel.insertBefore(ebBtn, chatPanel.firstChild);
+    // Show the unified Game Hub button
+    const btn = document.getElementById('btnGameHub');
+    if (btn) {
+      btn.style.display = 'inline-flex';
+      btn.onclick = () => this._openGameHub();
+    }
+    this._renderResourceHUD();
   }
 
-  _openEvidenceBoard() {
-    const existing = document.getElementById('evidenceBoardModal');
+  // ══════════════════════════════════════════════════════════
+  // UNIFIED GAME HUB (replaces town board + evidence + more)
+  // Tabs: Players | Evidence | Dossier (det only) | Suspicion
+  // ══════════════════════════════════════════════════════════
+  _openGameHub(startTab = 'players') {
+    const existing = document.getElementById('gameHubModal');
     if (existing) { existing.remove(); return; }
     const modal = document.createElement('div');
-    modal.id = 'evidenceBoardModal';
+    modal.id = 'gameHubModal';
     modal.className = 'overlay-modal';
+
+    const tabs = [
+      { key: 'players', label: '👥 Players', forAll: true },
+      { key: 'evidence', label: '🗂 Evidence', forAll: true },
+      { key: 'dossier', label: '🕵 Dossier', forAll: false, roles: ['detective'] },
+      { key: 'suspicion', label: '📊 Suspicion', forAll: true },
+    ];
+
+    let html = `<div class="modal-card gh-card"><div class="gh-header"><div class="gh-title">📋 GAME HUB</div><div class="gh-tabs">`;
+    tabs.forEach(tab => {
+      if (!tab.forAll && (!tab.roles || !tab.roles.includes(this.myRole))) return;
+      html += `<button class="gh-tab${tab.key === startTab ? ' gh-tab-active' : ''}" data-tab="${tab.key}">${tab.label}</button>`;
+    });
+    html += `</div></div><div class="gh-body" id="ghBody"></div><button class="btn btn-sm btn-out gh-close" id="ghClose">Close</button></div>`;
+    modal.innerHTML = html;
+    document.body.appendChild(modal);
+
+    // Wire tabs
+    modal.querySelectorAll('.gh-tab').forEach(btn => {
+      btn.onclick = () => {
+        modal.querySelectorAll('.gh-tab').forEach(b => b.classList.remove('gh-tab-active'));
+        btn.classList.add('gh-tab-active');
+        this._renderGameHubTab(btn.dataset.tab);
+      };
+    });
+    document.getElementById('ghClose').onclick = () => modal.remove();
+    this._renderGameHubTab(startTab);
+  }
+
+  _renderGameHubTab(tab) {
+    const body = document.getElementById('ghBody');
+    if (!body) return;
+    if (tab === 'players') this._renderGameHubPlayers(body);
+    else if (tab === 'evidence') this._renderGameHubEvidence(body);
+    else if (tab === 'dossier') this._renderGameHubDossier(body);
+    else if (tab === 'suspicion') this._renderGameHubSuspicion(body);
+  }
+
+  _renderGameHubPlayers(body) {
+    let html = '<div class="gh-section-title">👥 PLAYERS</div>';
+    this.players.forEach(p => {
+      const persona = this.charData[p.id]?.persona;
+      const icon = persona?.icon || '❓';
+      const name = persona?.name || p.name;
+      const alive = p.alive;
+      const roleStr = !alive ? ` — <span class="gh-role-tag">${p.role || 'unknown'}</span>` : '';
+      const statusClass = alive ? 'gh-alive' : 'gh-dead';
+      const executedLabel = (!alive && this.voteHistory.some(vh => vh.exId === p.id)) ? '<span class="gh-executed">EXECUTED</span>' : '';
+      const killedLabel = (!alive && !executedLabel) ? '<span class="gh-killed">KILLED</span>' : '';
+      html += `<div class="gh-player ${statusClass}"><span class="gh-player-icon">${icon}</span><span class="gh-player-name">${name}</span>${executedLabel}${killedLabel}${roleStr}</div>`;
+    });
+    body.innerHTML = html;
+  }
+
+  _renderGameHubEvidence(body, filter = 'all') {
+    let filtered = [...this.evidenceLedger];
+    if (filter === 'verified') filtered = filtered.filter(e => e.status === 'verified');
+    else if (filter === 'unverified') filtered = filtered.filter(e => e.status === 'unverified');
+    else if (['trace','small','medium','large','perfect'].includes(filter)) filtered = filtered.filter(e => e.strength === filter);
+
     const byRound = {};
-    this.evidenceLedger.forEach(e => { if (!byRound[e.round]) byRound[e.round] = []; byRound[e.round].push(e); });
+    filtered.forEach(e => { if (!byRound[e.round]) byRound[e.round] = []; byRound[e.round].push(e); });
     const totalVerified = this.evidenceLedger.filter(e => e.status === 'verified').length;
-    let html = `<div class="modal-card" style="max-width:520px;max-height:80vh;overflow-y:auto"><div class="recap-title">📋 EVIDENCE BOARD</div>`;
+
+    const filters = [
+      { key: 'all', label: '🗂 All' }, { key: 'verified', label: '✅ Verified' }, { key: 'unverified', label: '❓ Unverified' },
+      { key: 'trace', label: '💨 Trace' }, { key: 'small', label: '🔹 Small' }, { key: 'medium', label: '🔸 Medium' },
+      { key: 'large', label: '🔴 Strong' }, { key: 'perfect', label: '⭐ Perfect' },
+    ];
+    let html = '<div class="gh-section-title">🗂 EVIDENCE</div>';
+    html += `<div class="eb-filters">${filters.map(f => `<button class="eb-filter-btn${filter === f.key ? ' eb-filter-active' : ''}" data-filter="${f.key}">${f.label}</button>`).join('')}</div>`;
     html += `<div class="eb-stats"><span>🗂 ${this.evidenceLedger.length} total</span><span>✅ ${totalVerified} verified</span><span>❓ ${this.evidenceLedger.length - totalVerified} unverified</span></div>`;
-    if (!this.evidenceLedger.length) { html += `<div class="muted" style="padding:20px;text-align:center">No evidence collected yet.<br><span style="font-size:.7rem">Evidence is found at crime scenes and through investigation.</span></div>`; }
+    if (!filtered.length) {
+      html += `<div class="muted" style="padding:20px;text-align:center">${filter === 'all' ? 'No evidence collected yet.' : `No ${filter} evidence found.`}</div>`;
+    }
     Object.entries(byRound).sort((a,b) => Number(a[0]) - Number(b[0])).forEach(([round, evs]) => {
       const rv = evs.filter(e => e.status === 'verified').length;
       html += `<div class="eb-round"><div class="eb-round-header">Night ${round} <span class="eb-round-count">${evs.length} clue${evs.length > 1 ? 's' : ''}${rv ? `, ${rv} verified` : ''}</span></div>`;
       evs.forEach(e => {
-        const statusIcon = e.status === 'verified'
-          ? (e.accuracyPct >= 70 ? '🟢' : e.accuracyPct >= 30 ? '🟡' : '🔴')
-          : '❓';
+        const statusIcon = e.status === 'verified' ? (e.accuracyPct >= 70 ? '🟢' : e.accuracyPct >= 30 ? '🟡' : '🔴') : '❓';
         const statusLabel = e.status === 'verified' ? `${e.accuracyPct}%` : 'Unverified';
-        const sourceLabel = e.source === 'crime-scene' ? '🔍 Crime Scene' : '🔎 Investigation';
-        // Strength badge
+        const sourceLabel = e.source === 'crime-scene' ? '🔍 Crime Scene' : e.source === 'forged' ? '🔨 Forged' : '🔎 Investigation';
         const strengthMap = { none: { label: 'No Evidence', color: '#555' }, trace: { label: 'Trace', color: '#888' }, small: { label: 'Small', color: '#42a5f5' }, medium: { label: 'Medium', color: '#f9a825' }, large: { label: 'Strong', color: '#e53935' }, perfect: { label: '★ Perfect', color: '#ffd700' } };
         const str = strengthMap[e.strength] || strengthMap.medium;
         const strengthBadge = e.strength ? `<span class="eb-strength" style="color:${str.color};border-color:${str.color}">${str.label}</span>` : '';
-        html += `<div class="eb-evidence" style="border-left:3px solid ${str?.color || 'rgba(255,255,255,.1)'}"><div class="eb-evidence-header">${statusIcon} <span class="eb-status">${statusLabel}</span>${strengthBadge}<span class="eb-source">${sourceLabel}</span></div><div class="eb-text">${e.text}</div>${e.verdictText ? `<div class="eb-verdict">${e.verdictText}</div>` : ''}</div>`;
+        // Cross-reference highlighting
+        const crossRef = this._hasEvidenceCrossRef(e) ? '<span class="eb-cross-ref">✨ MATCH</span>' : '';
+        html += `<div class="eb-evidence" style="border-left:3px solid ${str?.color || 'rgba(255,255,255,.1)'}"><div class="eb-evidence-header">${statusIcon} <span class="eb-status">${statusLabel}</span>${strengthBadge}${crossRef}<span class="eb-source">${sourceLabel}</span></div><div class="eb-text">${e.text}</div>${e.verdictText ? `<div class="eb-verdict">${e.verdictText}</div>` : ''}</div>`;
       });
       html += `</div>`;
     });
-    html += `<button class="btn btn-sm btn-out" id="ebClose" style="margin-top:8px;width:100%">Close</button></div>`;
+    body.innerHTML = html;
+    body.querySelectorAll('.eb-filter-btn').forEach(btn => {
+      btn.onclick = () => this._renderGameHubEvidence(body, btn.dataset.filter);
+    });
+  }
+
+  _hasEvidenceCrossRef(evidence) {
+    if (this.myRole !== 'detective' || !Object.keys(this.dossier).length) return false;
+    const text = (evidence.text || '').toLowerCase();
+    for (const traits of Object.values(this.dossier)) {
+      for (const t of traits) {
+        if (t.value && text.includes(t.value.toLowerCase().slice(0, 15))) return true;
+      }
+    }
+    return false;
+  }
+
+  _renderGameHubDossier(body) {
+    let html = '<div class="gh-section-title">🕵 DETECTIVE\'S DOSSIER</div>';
+    html += `<div class="muted" style="font-size:.7rem;margin-bottom:8px">Hidden traits you've discovered. Only you can see this.</div>`;
+    const entries = Object.entries(this.dossier);
+    if (!entries.length) {
+      html += `<div class="muted" style="padding:20px;text-align:center">No hidden traits discovered yet.<br><span style="font-size:.7rem">Use "🕵 Investigate Traits" during investigation phase. (${3 - this.traitInvestsUsed}/3 remaining)</span></div>`;
+    }
+    entries.forEach(([pid, traits]) => {
+      const persona = this.charData[pid]?.persona;
+      const icon = persona?.icon || '❓';
+      const name = persona?.name || pid;
+      html += `<div class="gh-dossier-entry"><div class="gh-dossier-name">${icon} ${name}</div>`;
+      traits.forEach(t => {
+        html += `<div class="gh-dossier-trait"><span class="gh-trait-label">${t.label}:</span> <span class="gh-trait-value">${t.value}</span></div>`;
+      });
+      html += `</div>`;
+    });
+    body.innerHTML = html;
+  }
+
+  _renderGameHubSuspicion(body) {
+    let html = '<div class="gh-section-title">📊 SUSPICION & ACTIVITY</div>';
+    // Suspicion meter from suspicion votes
+    if (Object.keys(this.suspicionVotes).length > 0) {
+      html += '<div class="gh-sub-title">Suspicion Levels</div>';
+      Object.entries(this.suspicionVotes).forEach(([tid, v]) => {
+        const total = v.up + v.down;
+        const pct = total ? Math.round((v.down / total) * 100) : 0;
+        const name = this._pname(tid);
+        const bar = `<div class="gh-sus-bar"><div class="gh-sus-fill" style="width:${pct}%"></div></div>`;
+        html += `<div class="gh-sus-row"><span class="gh-sus-name">${name}</span>${bar}<span class="gh-sus-pct">${pct}%</span></div>`;
+      });
+    }
+    // Private chat activity indicators (visible to all)
+    const kSus = this.teamSuspicionCounters.killer || 0;
+    const dSus = this.teamSuspicionCounters.detective || 0;
+    if (kSus > 0 || dSus > 0) {
+      html += '<div class="gh-sub-title">Private Activity Detected</div>';
+      if (kSus >= 6) html += `<div class="gh-activity-alert">💭 ${kSus >= 20 ? 'A secret alliance is clearly operating!' : kSus >= 15 ? 'A group has been talking in private repeatedly...' : kSus >= 10 ? 'Hushed whispers can be heard from a corner...' : 'Some guests seem to be exchanging glances...'}</div>`;
+      if (dSus >= 6) html += `<div class="gh-activity-alert">💭 ${dSus >= 20 ? 'Investigators are clearly coordinating!' : dSus >= 15 ? 'Multiple people have been sharing notes privately...' : dSus >= 10 ? 'Someone has been passing notes under the table...' : 'A few guests seem unusually well-informed...'}</div>`;
+    }
+    // Vote history
+    if (this.voteHistory.length > 0) {
+      html += '<div class="gh-sub-title">Vote History</div>';
+      this.voteHistory.forEach(vh => {
+        const exPlayer = vh.exId ? this.players.find(p => p.id === vh.exId) : null;
+        html += `<div class="gh-vote-round">Round ${vh.round}${exPlayer ? ` — ${this._pname(vh.exId)} executed` : ' — No execution'}</div>`;
+      });
+    }
+    if (!Object.keys(this.suspicionVotes).length && !this.voteHistory.length && kSus < 6 && dSus < 6) {
+      html += `<div class="muted" style="padding:20px;text-align:center">No suspicion data yet.</div>`;
+    }
+    body.innerHTML = html;
+  }
+
+  // ══════════════════════════════════════════════════════════
+  // SUSPICION ESCALATION — private chat usage → public msgs
+  // ══════════════════════════════════════════════════════════
+  _checkSuspicionEscalation(team) {
+    const count = this.teamSuspicionCounters[team] || 0;
+    const msgs = {
+      6: '💭 Some guests seem to be exchanging glances...',
+      10: '💭 Hushed whispers can be heard from a corner of the room...',
+      15: '💭 A group of people have been seen talking in private repeatedly...',
+      20: '⚠ There is clearly a secret alliance forming among certain guests!',
+    };
+    if (msgs[count]) {
+      this.net.relay({ t: 'SUSPICION_MSG', text: msgs[count] });
+      chat.addMessage('', msgs[count], 'system');
+      ui.addLog(msgs[count], 'ls');
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════
+  // RESOURCE HUD — persistent top bar
+  // ══════════════════════════════════════════════════════════
+  _renderResourceHUD() {
+    const el = document.getElementById('resourceHUD');
+    if (!el) return;
+    if (this.phase === 'lobby' || this.phase === 'over') { el.style.display = 'none'; return; }
+    el.style.display = 'flex';
+    const maxActions = this._getMyMaxActions();
+    let html = `<span class="rh-item">🔎 Actions: ${this.myActionsUsed || 0}/${maxActions}</span>`;
+    if (this.myRole === 'killer') {
+      html += `<span class="rh-item">🗡 Chat: ${this.teamChatUsed}/3</span>`;
+      html += `<span class="rh-item">🔨 Forge: ${this.forgesUsed}/1</span>`;
+    } else if (this.myRole === 'detective') {
+      html += `<span class="rh-item">🔍 Chat: ${this.teamChatUsed}/3</span>`;
+      html += `<span class="rh-item">🕵 Traits: ${this.traitInvestsUsed}/3</span>`;
+    }
+    el.innerHTML = html;
+  }
+
+  // ══════════════════════════════════════════════════════════
+  // KILLER EVIDENCE FORGING (1/match)
+  // ══════════════════════════════════════════════════════════
+  _forgeEvidence() {
+    if (this.myRole !== 'killer') return;
+    if (this.forgesUsed >= 1) { ui.toast('You have already used your forge this match', true); return; }
+    // Show modal with alive players + public traits
+    const existing = document.getElementById('forgeModal');
+    if (existing) { existing.remove(); return; }
+    const modal = document.createElement('div');
+    modal.id = 'forgeModal';
+    modal.className = 'overlay-modal';
+    const alive = this.players.filter(p => p.alive && p.id !== this.myId && p.role !== 'killer');
+    let html = `<div class="modal-card" style="max-width:450px;max-height:80vh;overflow-y:auto"><div class="recap-title">🔨 FORGE EVIDENCE</div>`;
+    html += `<div class="muted" style="font-size:.7rem;margin-bottom:8px">Pick a player and one of their public traits to plant as false evidence.</div>`;
+    alive.forEach(p => {
+      const char = this.charData[p.id]?.character;
+      const persona = this.charData[p.id]?.persona;
+      if (!char) return;
+      const pub = char.public;
+      const traits = [
+        { key: 'hairStyle', label: 'Hair', val: pub.hairStyle },
+        { key: 'hairColor', label: 'Hair Color', val: pub.hairColor },
+        { key: 'eyeColor', label: 'Eyes', val: pub.eyeColor },
+        { key: 'clothing', label: 'Clothing', val: pub.clothing },
+        { key: 'accessory', label: 'Accessory', val: pub.accessory },
+      ];
+      html += `<div class="forge-player"><div class="forge-player-name">${persona?.icon || '❓'} ${persona?.name || p.name}</div>`;
+      traits.forEach(t => {
+        html += `<button class="btn btn-sm forge-trait-btn" data-pid="${p.id}" data-trait="${t.key}" data-val="${t.val}">${t.label}: ${t.val}</button>`;
+      });
+      html += `</div>`;
+    });
+    html += `<button class="btn btn-sm btn-out" id="forgeClose" style="margin-top:8px;width:100%">Cancel</button></div>`;
     modal.innerHTML = html;
     document.body.appendChild(modal);
-    document.getElementById('ebClose').onclick = () => modal.remove();
+    document.getElementById('forgeClose').onclick = () => modal.remove();
+    modal.querySelectorAll('.forge-trait-btn').forEach(btn => {
+      btn.onclick = () => {
+        const trait = btn.dataset.val;
+        const texts = [
+          `Witnesses reported seeing someone with ${trait} near the scene.`,
+          `A figure matching description "${trait}" was spotted fleeing.`,
+          `Physical evidence suggests the attacker had ${trait}.`,
+        ];
+        const text = texts[Math.floor(Math.random() * texts.length)];
+        const forgedEvidence = { id: 'ev-' + Math.random().toString(36).slice(2,8), text, isFalse: true, status: 'unverified', accuracyPct: null, verdictText: null, source: 'forged', round: this.round, strength: 'medium' };
+        this.evidenceLedger.push(forgedEvidence);
+        this.forgesUsed++;
+        ui.toast('🔨 Evidence forged and planted!', false);
+        ui.addLog('🔨 You planted forged evidence in the crime scene.', 'lk');
+        this._renderResourceHUD();
+        modal.remove();
+        // If host, broadcast new evidence
+        if (this.isHost) {
+          this.net.relay({ t: 'NEW_EVIDENCE', evidence: forgedEvidence });
+        } else {
+          this.net.relay({ t: 'NEW_EVIDENCE', evidence: forgedEvidence });
+        }
+      };
+    });
+  }
+
+  // ══════════════════════════════════════════════════════════
+  // DETECTIVE HIDDEN TRAIT INVESTIGATION (3/match)
+  // ══════════════════════════════════════════════════════════
+  async _investigateTraits() {
+    if (this.myRole !== 'detective') return;
+    if (this.traitInvestsUsed >= 3) { ui.toast('You have used all 3 trait investigations this match', true); return; }
+    // Show target picker
+    const alive = this.players.filter(p => p.alive && p.id !== this.myId);
+    const existing = document.getElementById('traitInvestModal');
+    if (existing) { existing.remove(); return; }
+    const modal = document.createElement('div');
+    modal.id = 'traitInvestModal';
+    modal.className = 'overlay-modal';
+    let html = `<div class="modal-card" style="max-width:400px"><div class="recap-title">🕵 INVESTIGATE HIDDEN TRAITS</div>`;
+    html += `<div class="muted" style="font-size:.7rem;margin-bottom:8px">Pick a player to investigate their hidden traits. (${3 - this.traitInvestsUsed}/3 remaining)</div>`;
+    alive.forEach(p => {
+      const persona = this.charData[p.id]?.persona;
+      html += `<button class="btn btn-sm btn-out forge-trait-btn" data-pid="${p.id}" style="width:100%;margin:3px 0">${persona?.icon || '❓'} ${persona?.name || p.name}</button>`;
+    });
+    html += `<button class="btn btn-sm btn-out" id="traitInvestClose" style="margin-top:8px;width:100%">Cancel</button></div>`;
+    modal.innerHTML = html;
+    document.body.appendChild(modal);
+    document.getElementById('traitInvestClose').onclick = () => modal.remove();
+    modal.querySelectorAll('.forge-trait-btn').forEach(btn => {
+      btn.onclick = async () => {
+        modal.remove();
+        const tid = btn.dataset.pid;
+        const targetChar = this.charData[tid]?.character;
+        if (!targetChar) { ui.toast('Cannot investigate — no character data', true); return; }
+        // Run QTE
+        const qteC = document.createElement('div');
+        qteC.className = 'qte-overlay';
+        qteC.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;';
+        document.body.appendChild(qteC);
+        const diff = getInvestigateDifficulty(true);
+        const score = await runQTE(qteC, diff, 'investigate');
+        qteC.remove();
+        const result = generateTraitInvestResult(targetChar, score);
+        this.traitInvestsUsed++;
+        this._renderResourceHUD();
+        if (result.success) {
+          // Add to dossier
+          if (!this.dossier[tid]) this.dossier[tid] = [];
+          result.traits.forEach(t => {
+            if (!this.dossier[tid].find(x => x.key === t.key)) this.dossier[tid].push(t);
+          });
+          ui.toast(result.text, false);
+          ui.addLog(result.text, 'lc');
+        } else {
+          ui.toast(result.text, true);
+          ui.addLog(result.text, 'ls');
+        }
+      };
+    });
   }
 
   // ── Evidence Window (dedicated modal, like town board) ─────
