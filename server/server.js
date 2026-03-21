@@ -32,8 +32,10 @@ app.use((req, res, next) => {
 app.set('trust proxy', 1);
 
 // Serve static frontend
+// No maxAge in dev so changes take effect immediately; set via CACHE_MAX_AGE env for production
+const cacheAge = process.env.CACHE_MAX_AGE || '0';
 app.use(express.static(path.join(__dirname, '..', 'public'), {
-  maxAge: '1h',
+  maxAge: cacheAge,
   etag: true,
 }));
 
@@ -52,7 +54,7 @@ const rooms = new Map(); // code -> { players: Map<id, {ws, name, disconnectedAt
 const RECONNECT_GRACE_MS = 15000;
 const CODE_LENGTH = 6;
 const MAX_ROOMS = 100;
-const MAX_PLAYERS_PER_ROOM = 16;
+const MAX_PLAYERS_PER_ROOM = 30;
 const MAX_NAME_LENGTH = 20;
 const RATE_LIMIT_WINDOW = 1000; // 1 second
 const RATE_LIMIT_MAX = 30;      // max 30 messages per second
