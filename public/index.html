@@ -426,77 +426,20 @@
       <h3>📜 How to Play</h3>
 
       <div class="rules-section">
-        <h4>The Game</h4>
-        <p>NightFall is a social deduction game. Players are secretly assigned roles and <strong>unique game identities</strong> ("The Rose", "The Raven", etc). Each night, killers strike and everyone investigates. Clues reference identities — deduce who the killer is!</p>
+        <h4 style="color:var(--gold)">🎯 The Goal</h4>
+        <p><strong>Innocents</strong> must deduce and execute all Killers. <strong>Killers</strong> must silence the town until they outnumber the living.</p>
       </div>
 
       <div class="rules-section">
-        <h4>🎮 QTE Kill System</h4>
-        <p>Killers don't just click to kill — they must complete a <strong>Quick Time Event</strong> (press keys in sequence). A <strong>perfect QTE</strong> = clean kill, no clues. A <strong>failed QTE</strong> = evidence left behind pointing to the killer's game identity.</p>
-        <p style="color:var(--blood-bright);font-size:.85rem">⚠ The QTE gets <strong>harder</strong> with each kill — serial killers get sloppy!</p>
+        <h4 style="color:var(--blood-bright)">🌑 The Night (Action Phase)</h4>
+        <p>Killers choose victims. Innocents choose suspects to investigate. Then, <strong>everyone must complete a QTE (Quick Time Event)</strong>.</p>
+        <p>Precise key-presses equal a clean night. Sloppy presses mean you fail your investigation, or worse — leave behind physical evidence if you are the killer.</p>
       </div>
 
       <div class="rules-section">
-        <h4>🔍 Investigation System</h4>
-        <p><strong>Every alive player</strong> can investigate a suspect at night via QTE. Better accuracy = stronger clues.</p>
-        <p><strong>Detectives</strong> get an <strong>easier QTE</strong> — they're trained investigators. Civilians can try too, but it's harder.</p>
-      </div>
-
-      <div class="rules-section">
-        <h4>Core Roles</h4>
-        <div class="role-card">
-          <div class="role-card-icon">🗡</div>
-          <div class="role-card-info">
-            <div class="role-card-name" style="color:var(--blood-bright)">Killer</div>
-            <div class="role-card-desc">Choose a victim, then complete a QTE to attack. Sloppy kills leave evidence at the crime scene.</div>
-          </div>
-        </div>
-        <div class="role-card">
-          <div class="role-card-icon">🔍</div>
-          <div class="role-card-info">
-            <div class="role-card-name" style="color:var(--det-bright)">Detective</div>
-            <div class="role-card-desc">Investigate with an easier QTE. Your training gives you stronger, clearer results than civilians.</div>
-          </div>
-        </div>
-        <div class="role-card">
-          <div class="role-card-icon">🧑</div>
-          <div class="role-card-info">
-            <div class="role-card-name" style="color:var(--success-light)">Civilian</div>
-            <div class="role-card-desc">Can investigate at night (harder QTE). Observe, discuss, and vote wisely — every clue matters.</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="rules-section">
-        <h4>Optional Roles</h4>
-        <div class="role-card">
-          <div class="role-card-icon">🩺</div>
-          <div class="role-card-info">
-            <div class="role-card-name" style="color:var(--success-light)">Doctor</div>
-            <div class="role-card-desc">Protect one player per night, then investigate. Cannot self-protect two nights in a row.</div>
-          </div>
-        </div>
-        <div class="role-card">
-          <div class="role-card-icon">🤡</div>
-          <div class="role-card-info">
-            <div class="role-card-name" style="color:var(--warn)">Jester</div>
-            <div class="role-card-desc">Wins if voted out. An agent of chaos — the game continues for others.</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="rules-section">
-        <h4>Game Flow</h4>
-        <p>🌙 <strong>1. LIGHTS OUT:</strong> The manor goes dark. Killer selects a victim → QTE attack. Doctor protects (if enabled).</p>
-        <p>🔦 <strong>2. LIGHTS ON:</strong> Murder discovered + crime scene evidence. All players investigate a suspect via QTE. <strong>No talking!</strong></p>
-        <p>🍽 <strong>3. DINNER:</strong> Everyone gathers at the table. Discuss clues, share findings, and <strong>vote</strong> to execute a suspect.</p>
-        <p>⚖ <strong>4. VERDICT:</strong> Most-voted player is executed. Their role is revealed: Killer ☠, Innocent 😇, or Jester 🤡.</p>
-        <p>🔄 <strong>Repeat</strong> until one side wins.</p>
-      </div>
-
-      <div class="rules-section">
-        <h4>⚠ False Evidence</h4>
-        <p>Low QTE accuracy doesn't just mean weak clues — it can produce <strong>FALSE evidence</strong> pointing to <strong>innocent players</strong>. The accuracy warning (🟢🟡🔴) tells you how reliable a clue is. Don't blindly trust red-flagged evidence!</p>
+        <h4 style="color:var(--det-bright)">☀️ The Day (Deduction Phase)</h4>
+        <p>Discuss the night in chat. Evidence dropped by killers will automatically link back to their secret <strong>Game Persona</strong> (e.g. <em>The Clockmaker</em>).</p>
+        <p>Use the <strong>Suspicion Heatmap</strong> to track voting patterns, and vote to execute the most guilty player before time runs out!</p>
       </div>
 
       <button class="btn btn-red mt8" id="rulesOk">Got It</button>
